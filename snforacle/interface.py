@@ -118,6 +118,11 @@ def smith_normal_form(
             The sequence ``[d₁, …, dᵣ]``.
     """
     m = _parse_matrix(matrix)
+    if m.nrows == 0 or m.ncols == 0:
+        return SNFResult(
+            smith_normal_form=_to_dense_model(m.to_dense(), m.nrows, m.ncols),
+            invariant_factors=[],
+        )
     dense = m.to_dense()
     snf_mat, inv = _get_backend(backend).compute_snf(dense, m.nrows, m.ncols)
     return SNFResult(
@@ -156,6 +161,15 @@ def smith_normal_form_with_transforms(
         The matrices satisfy ``U @ M @ V = smith_normal_form``.
     """
     m = _parse_matrix(matrix)
+    if m.nrows == 0 or m.ncols == 0:
+        def _identity(n):
+            return [[1 if i == j else 0 for j in range(n)] for i in range(n)]
+        return SNFWithTransformsResult(
+            smith_normal_form=_to_dense_model(m.to_dense(), m.nrows, m.ncols),
+            invariant_factors=[],
+            left_transform=_to_dense_model(_identity(m.nrows), m.nrows, m.nrows),
+            right_transform=_to_dense_model(_identity(m.ncols), m.ncols, m.ncols),
+        )
     dense = m.to_dense()
     snf_mat, inv, left, right = _get_backend(backend).compute_snf_with_transforms(
         dense, m.nrows, m.ncols

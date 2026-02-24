@@ -45,8 +45,8 @@ class DenseIntMatrix(BaseModel):
     """An integer matrix stored as a full list of rows."""
 
     format: Literal["dense"]
-    nrows: Annotated[int, Field(gt=0)]
-    ncols: Annotated[int, Field(gt=0)]
+    nrows: Annotated[int, Field(ge=0)]
+    ncols: Annotated[int, Field(ge=0)]
     entries: list[list[int]]
 
     @model_validator(mode="after")
@@ -75,8 +75,8 @@ class SparseIntMatrix(BaseModel):
     """
 
     format: Literal["sparse"]
-    nrows: Annotated[int, Field(gt=0)]
-    ncols: Annotated[int, Field(gt=0)]
+    nrows: Annotated[int, Field(ge=0)]
+    ncols: Annotated[int, Field(ge=0)]
     entries: list[SparseEntry] = Field(default_factory=list)
 
     @model_validator(mode="after")
