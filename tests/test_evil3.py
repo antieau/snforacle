@@ -74,22 +74,19 @@ def _verify_transforms(M, result, nrows, ncols):
 # ===========================================================================
 
 class TestPariStackOverflow:
-    """PARI overflows its stack on large matrices because:
-    1. to_dense() materializes the full nrows*ncols matrix
-    2. _to_pari_matrix creates a flat list of all elements
-    3. pari.matrix() allocates on the PARI stack
-    
-    A 1000x1000 zero matrix = 10^6 entries = crashes PARI."""
+    """PARI's stack has been increased to 128 MB (see _pari() in cypari2.py),
+    so 1000x1000 matrices now work. These tests verify that PARI can handle
+    large sparse matrices after the stack increase."""
 
     def test_sparse_1000x1000_zero_cypari2(self):
-        """1000x1000 sparse zero matrix overflows PARI stack."""
-        with pytest.raises(Exception):  # cypari2.handle_error.PariError
-            smith_normal_form(_sparse(1000, 1000, []), backend="cypari2")
+        """1000x1000 sparse zero matrix now works with enlarged PARI stack."""
+        result = smith_normal_form(_sparse(1000, 1000, []), backend="cypari2")
+        assert result.invariant_factors == []
 
     def test_sparse_1000x1000_single_entry_cypari2(self):
-        """1000x1000 sparse with 1 entry — same crash."""
-        with pytest.raises(Exception):
-            smith_normal_form(_sparse(1000, 1000, [(0, 0, 7)]), backend="cypari2")
+        """1000x1000 sparse with 1 entry now works with enlarged PARI stack."""
+        result = smith_normal_form(_sparse(1000, 1000, [(0, 0, 7)]), backend="cypari2")
+        assert result.invariant_factors == [7]
 
     def test_sparse_1000x1000_zero_flint(self):
         """1000x1000 via flint — may or may not work (depends on flint's stack)."""

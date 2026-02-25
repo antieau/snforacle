@@ -84,11 +84,33 @@ def _reshape(flat_ints: list[int], rows: int, cols: int) -> list[list[int]]:
     return [flat_ints[r * cols : (r + 1) * cols] for r in range(rows)]
 
 
+def _safe_parse_ints(tokens: list[str]) -> list[int]:
+    """Parse a list of string tokens to integers, handling backslashes from line wrapping.
+
+    When MAGMA output lines are very long, they may wrap, and tokens can have trailing
+    backslashes indicating continuation. Strip these before parsing.
+    """
+    result = []
+    for token in tokens:
+        # Remove trailing backslash (line continuation marker from MAGMA output wrapping)
+        token = token.rstrip('\\').strip()
+        # Skip empty tokens (can occur from multiple spaces or line endings)
+        if token and token != '':
+            try:
+                result.append(int(token))
+            except ValueError:
+                # Skip tokens that can't be parsed as integers
+                pass
+    return result
+
+
 def _parse_magma_output(stdout: str, nrows: int, ncols: int) -> dict:
     """Parse SNF, LEFT, RIGHT lines from MAGMA output.
 
     Handles line wrapping caused by very long output (large matrices or large integers).
     Collects continuation lines by detecting the marker keyword on each logical block.
+    When very large numbers span lines, they are properly reconstructed by joining
+    the last token of a line ending in backslash with the first token of the next line.
     """
     snf_flat: list[int] | None = None
     left_flat: list[int] | None = None
@@ -98,11 +120,26 @@ def _parse_magma_output(stdout: str, nrows: int, ncols: int) -> dict:
     # A new logical line starts when we see SNF, LEFT, or RIGHT markers
     current_block_name = None
     current_block_values = []
+    last_token_incomplete = False  # Track if the previous line ended with an incomplete number
+    incomplete_token = ""  # Store the incomplete number part
 
-    for line in stdout.splitlines():
+    all_lines = stdout.splitlines()
+    for line_idx, line in enumerate(all_lines):
         line = line.strip()
         if not line:
             continue
+
+        tokens = line.split()
+
+        # If previous line ended with backslash, join tokens
+        if last_token_incomplete and tokens:
+            # The first token of this line continues the previous number
+            tokens[0] = incomplete_token + tokens[0]
+            last_token_incomplete = False
+            incomplete_token = ""
+
+        # Check if this line ends with backslash (indicates number wrapping)
+        ends_with_backslash = line.endswith("\\")
 
         # Check for new block marker
         if line.startswith("SNF"):
@@ -116,7 +153,16 @@ def _parse_magma_output(stdout: str, nrows: int, ncols: int) -> dict:
 
             # Start new SNF block
             current_block_name = "SNF"
-            current_block_values = [int(x) for x in line[3:].split()]
+            # Remove "SNF" marker and parse
+            snf_tokens = line[3:].split()
+            # Handle the case where the last token might be incomplete
+            if ends_with_backslash and snf_tokens:
+                last_token = snf_tokens[-1].rstrip('\\')
+                snf_tokens[-1] = last_token  # Update with stripped version
+                incomplete_token = last_token  # Store for next line
+                snf_tokens = snf_tokens[:-1]  # Remove incomplete token from parsing
+                last_token_incomplete = True
+            current_block_values = _safe_parse_ints(snf_tokens)
 
         elif line.startswith("LEFT"):
             # Save previous block
@@ -129,7 +175,16 @@ def _parse_magma_output(stdout: str, nrows: int, ncols: int) -> dict:
 
             # Start new LEFT block
             current_block_name = "LEFT"
-            current_block_values = [int(x) for x in line[4:].split()]
+            # Remove "LEFT" marker and parse
+            left_tokens = line[4:].split()
+            # Handle incomplete token
+            if ends_with_backslash and left_tokens:
+                last_token = left_tokens[-1].rstrip('\\')
+                left_tokens[-1] = last_token
+                incomplete_token = last_token
+                left_tokens = left_tokens[:-1]
+                last_token_incomplete = True
+            current_block_values = _safe_parse_ints(left_tokens)
 
         elif line.startswith("RIGHT"):
             # Save previous block
@@ -142,12 +197,28 @@ def _parse_magma_output(stdout: str, nrows: int, ncols: int) -> dict:
 
             # Start new RIGHT block
             current_block_name = "RIGHT"
-            current_block_values = [int(x) for x in line[5:].split()]
+            # Remove "RIGHT" marker and parse
+            right_tokens = line[5:].split()
+            # Handle incomplete token
+            if ends_with_backslash and right_tokens:
+                last_token = right_tokens[-1].rstrip('\\')
+                right_tokens[-1] = last_token
+                incomplete_token = last_token
+                right_tokens = right_tokens[:-1]
+                last_token_incomplete = True
+            current_block_values = _safe_parse_ints(right_tokens)
 
         else:
             # Continuation line: append values to current block
             if current_block_name is not None:
-                current_block_values.extend([int(x) for x in line.split()])
+                # Handle incomplete token
+                if ends_with_backslash and tokens:
+                    last_token = tokens[-1].rstrip('\\')
+                    tokens[-1] = last_token
+                    incomplete_token = last_token
+                    tokens = tokens[:-1]
+                    last_token_incomplete = True
+                current_block_values.extend(_safe_parse_ints(tokens))
 
     # Save the last block
     if current_block_name == "SNF":
@@ -173,18 +244,30 @@ def _parse_magma_output(stdout: str, nrows: int, ncols: int) -> dict:
 def _parse_magma_hnf_output(stdout: str, nrows: int, ncols: int) -> dict:
     """Parse HNF, LEFT lines from MAGMA output.
 
-    Handles line wrapping caused by very long output.
+    Handles line wrapping caused by very long output, including numbers split across lines.
     """
     hnf_flat: list[int] | None = None
     left_flat: list[int] | None = None
 
     current_block_name = None
     current_block_values = []
+    last_token_incomplete = False
+    incomplete_token = ""
 
     for line in stdout.splitlines():
         line = line.strip()
         if not line:
             continue
+
+        tokens = line.split()
+
+        # Handle incomplete token from previous line
+        if last_token_incomplete and tokens:
+            tokens[0] = incomplete_token + tokens[0]
+            last_token_incomplete = False
+            incomplete_token = ""
+
+        ends_with_backslash = line.endswith("\\")
 
         # Check for new block marker
         if line.startswith("HNF"):
@@ -196,7 +279,14 @@ def _parse_magma_hnf_output(stdout: str, nrows: int, ncols: int) -> dict:
 
             # Start new HNF block
             current_block_name = "HNF"
-            current_block_values = [int(x) for x in line[3:].split()]
+            hnf_tokens = line[3:].split()
+            if ends_with_backslash and hnf_tokens:
+                last_token = hnf_tokens[-1].rstrip('\\')
+                hnf_tokens[-1] = last_token
+                incomplete_token = last_token
+                hnf_tokens = hnf_tokens[:-1]
+                last_token_incomplete = True
+            current_block_values = _safe_parse_ints(hnf_tokens)
 
         elif line.startswith("LEFT"):
             # Save previous block
@@ -207,12 +297,25 @@ def _parse_magma_hnf_output(stdout: str, nrows: int, ncols: int) -> dict:
 
             # Start new LEFT block
             current_block_name = "LEFT"
-            current_block_values = [int(x) for x in line[4:].split()]
+            left_tokens = line[4:].split()
+            if ends_with_backslash and left_tokens:
+                last_token = left_tokens[-1].rstrip('\\')
+                left_tokens[-1] = last_token
+                incomplete_token = last_token
+                left_tokens = left_tokens[:-1]
+                last_token_incomplete = True
+            current_block_values = _safe_parse_ints(left_tokens)
 
         else:
             # Continuation line: append values to current block
             if current_block_name is not None:
-                current_block_values.extend([int(x) for x in line.split()])
+                if ends_with_backslash and tokens:
+                    last_token = tokens[-1].rstrip('\\')
+                    tokens[-1] = last_token
+                    incomplete_token = last_token
+                    tokens = tokens[:-1]
+                    last_token_incomplete = True
+                current_block_values.extend(_safe_parse_ints(tokens))
 
     # Save the last block
     if current_block_name == "HNF":
@@ -233,12 +336,47 @@ def _parse_magma_hnf_output(stdout: str, nrows: int, ncols: int) -> dict:
 
 
 def _parse_magma_ed_output(stdout: str) -> dict:
-    """Parse ED line from MAGMA output."""
+    """Parse ED line from MAGMA output, handling line wrapping and numbers split across lines."""
+    ed_flat: list[int] | None = None
+    last_token_incomplete = False
+    incomplete_token = ""
+
     for line in stdout.splitlines():
         line = line.strip()
+        if not line:
+            continue
+
+        tokens = line.split()
+
+        # Handle incomplete token from previous line
+        if last_token_incomplete and tokens:
+            tokens[0] = incomplete_token + tokens[0]
+            last_token_incomplete = False
+            incomplete_token = ""
+
+        ends_with_backslash = line.endswith("\\")
+
         if line.startswith("ED"):
-            ed_flat = [int(x) for x in line[2:].split()]
-            return {"elementary_divisors": ed_flat}
+            ed_tokens = line[2:].split()
+            if ends_with_backslash and ed_tokens:
+                last_token = ed_tokens[-1].rstrip('\\')
+                ed_tokens[-1] = last_token
+                incomplete_token = last_token
+                ed_tokens = ed_tokens[:-1]
+                last_token_incomplete = True
+            ed_flat = _safe_parse_ints(ed_tokens)
+        elif ed_flat is not None:
+            # Continuation line: append more values
+            if ends_with_backslash and tokens:
+                last_token = tokens[-1].rstrip('\\')
+                tokens[-1] = last_token
+                incomplete_token = last_token
+                tokens = tokens[:-1]
+                last_token_incomplete = True
+            ed_flat.extend(_safe_parse_ints(tokens))
+
+    if ed_flat is not None:
+        return {"elementary_divisors": ed_flat}
 
     raise ValueError(f"Could not parse MAGMA ED output. stdout was:\n{stdout}")
 
