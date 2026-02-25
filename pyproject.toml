@@ -12,7 +12,7 @@ dependencies = ["pydantic>=2.0"]
 [project.optional-dependencies]
 cypari2 = ["cypari2>=2.2"]
 flint = ["python-flint>=0.8.0"]
-dev = ["pytest"]
+dev = ["pytest", "numpy"]
 
 [tool.setuptools.packages.find]
 where = ["."]

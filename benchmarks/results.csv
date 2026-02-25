@@ -1,0 +1,81 @@
+Backend,Size,Variant,Time (s)
+cypari2,10,dense,0.0002
+flint,10,dense,0.0002
+sage,10,dense,1.1320
+magma,10,dense,0.0337
+cypari2,10,sparse,0.0000
+flint,10,sparse,0.0000
+sage,10,sparse,1.1332
+magma,10,sparse,0.0291
+cypari2,10,dense+transforms,0.0017
+flint,10,dense+transforms,N/A
+sage,10,dense+transforms,1.1271
+magma,10,dense+transforms,0.0290
+cypari2,10,sparse+transforms,0.0002
+flint,10,sparse+transforms,N/A
+sage,10,sparse+transforms,1.1354
+magma,10,sparse+transforms,0.0288
+cypari2,20,dense,0.0005
+flint,20,dense,0.0006
+sage,20,dense,1.1308
+magma,20,dense,error: invalid literal for int() with base 10: '-25103725327428515344941429037623941559619611537417916386177499806747023777390\\'
+cypari2,20,sparse,0.0001
+flint,20,sparse,0.0001
+sage,20,sparse,1.1321
+magma,20,sparse,0.0293
+cypari2,20,dense+transforms,0.0102
+flint,20,dense+transforms,N/A
+sage,20,dense+transforms,1.1353
+magma,20,dense+transforms,error: invalid literal for int() with base 10: '-25103725327428515344941429037623941559619611537417916386177499806747023777390\\'
+cypari2,20,sparse+transforms,0.0015
+flint,20,sparse+transforms,N/A
+sage,20,sparse+transforms,1.1312
+magma,20,sparse+transforms,0.0291
+cypari2,30,dense,0.0014
+flint,30,dense,0.0024
+sage,30,dense,1.1389
+magma,30,dense,0.0378
+cypari2,30,sparse,0.0004
+flint,30,sparse,0.0002
+sage,30,sparse,1.1325
+magma,30,sparse,0.0311
+cypari2,30,dense+transforms,0.0128
+flint,30,dense+transforms,N/A
+sage,30,dense+transforms,1.1463
+magma,30,dense+transforms,0.0381
+cypari2,30,sparse+transforms,0.0035
+flint,30,sparse+transforms,N/A
+sage,30,sparse+transforms,1.1337
+magma,30,sparse+transforms,0.0312
+cypari2,50,dense,0.0070
+flint,50,dense,0.0165
+sage,50,dense,1.1816
+magma,50,dense,error: invalid literal for int() with base 10: '658231412009199864494460193206520872909651842522730099580672149990241327855098\\'
+cypari2,50,sparse,0.0013
+flint,50,sparse,0.0006
+sage,50,sparse,1.1372
+magma,50,sparse,0.0356
+cypari2,50,dense+transforms,0.0461
+flint,50,dense+transforms,N/A
+sage,50,dense+transforms,1.1793
+magma,50,dense+transforms,error: invalid literal for int() with base 10: '658231412009199864494460193206520872909651842522730099580672149990241327855098\\'
+cypari2,50,sparse+transforms,0.0127
+flint,50,sparse+transforms,N/A
+sage,50,sparse+transforms,1.1463
+magma,50,sparse+transforms,0.0359
+cypari2,75,dense,0.0279
+flint,75,dense,0.0878
+sage,75,dense,1.3663
+magma,75,dense,error: invalid literal for int() with base 10: '786863002369284903651040520739501943016760854663918552681106803574161710026252\\'
+cypari2,75,sparse,0.0039
+flint,75,sparse,0.0031
+sage,75,sparse,1.1538
+magma,75,sparse,0.0438
+cypari2,75,dense+transforms,0.1276
+flint,75,dense+transforms,N/A
+sage,75,dense+transforms,1.3672
+magma,75,dense+transforms,error: invalid literal for int() with base 10: '786863002369284903651040520739501943016760854663918552681106803574161710026252\\'
+cypari2,75,sparse+transforms,0.0428
+flint,75,sparse+transforms,N/A
+sage,75,sparse+transforms,1.1493
+magma,75,sparse+transforms,0.0442

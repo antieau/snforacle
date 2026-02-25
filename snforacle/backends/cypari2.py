@@ -17,6 +17,9 @@ def _pari():
         ) from exc
     if not hasattr(_pari, "_instance"):
         _pari._instance = cypari2.Pari()
+        # Default 8 MB stack is too small for matrices ~1000×1000.
+        # Allocate 128 MB to handle matrices up to ~5000×5000.
+        _pari._instance.allocatemem(128 * 1024 * 1024, silent=True)
     return _pari._instance
 
 

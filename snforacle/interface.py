@@ -65,8 +65,22 @@ def _lazy_register_flint() -> None:
     _register("flint", FlintBackend)
 
 
+def _lazy_register_sage() -> None:
+    from snforacle.backends.sage import SageBackend
+
+    _register("sage", SageBackend)
+
+
+def _lazy_register_magma() -> None:
+    from snforacle.backends.magma import MagmaBackend
+
+    _register("magma", MagmaBackend)
+
+
 _lazy_register_cypari2()
 _lazy_register_flint()
+_lazy_register_sage()
+_lazy_register_magma()
 
 # ---------------------------------------------------------------------------
 # Input normalisation
@@ -85,6 +99,20 @@ def _to_dense_model(
     entries: list[list[int]], nrows: int, ncols: int
 ) -> DenseIntMatrix:
     return DenseIntMatrix(format="dense", nrows=nrows, ncols=ncols, entries=entries)
+
+
+_MAX_DENSE_ELEMENTS = 10_000_000  # ~280 MB of Python ints
+
+
+def _check_dense_size(nrows: int, ncols: int) -> None:
+    """Raise ValueError if dense expansion would be unreasonably large."""
+    n_elements = nrows * ncols
+    if n_elements > _MAX_DENSE_ELEMENTS:
+        raise ValueError(
+            f"Matrix dimensions {nrows}x{ncols} = {n_elements} elements "
+            f"exceed the maximum of {_MAX_DENSE_ELEMENTS}. "
+            f"Consider using a smaller matrix or a different tool."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +151,7 @@ def smith_normal_form(
             smith_normal_form=_to_dense_model(m.to_dense(), m.nrows, m.ncols),
             invariant_factors=[],
         )
+    _check_dense_size(m.nrows, m.ncols)
     dense = m.to_dense()
     snf_mat, inv = _get_backend(backend).compute_snf(dense, m.nrows, m.ncols)
     return SNFResult(
@@ -170,6 +199,7 @@ def smith_normal_form_with_transforms(
             left_transform=_to_dense_model(_identity(m.nrows), m.nrows, m.nrows),
             right_transform=_to_dense_model(_identity(m.ncols), m.ncols, m.ncols),
         )
+    _check_dense_size(m.nrows, m.ncols)
     dense = m.to_dense()
     snf_mat, inv, left, right = _get_backend(backend).compute_snf_with_transforms(
         dense, m.nrows, m.ncols
