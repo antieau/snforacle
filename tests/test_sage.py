@@ -4,8 +4,14 @@ import shutil
 
 import pytest
 
-from snforacle import smith_normal_form, smith_normal_form_with_transforms
-from snforacle.schema import SNFResult, SNFWithTransformsResult
+from snforacle import (
+    elementary_divisors,
+    hermite_normal_form,
+    hermite_normal_form_with_transform,
+    smith_normal_form,
+    smith_normal_form_with_transforms,
+)
+from snforacle.schema import HNFResult, HNFWithTransformResult, SNFResult, SNFWithTransformsResult
 
 pytestmark = pytest.mark.skipif(
     shutil.which("sage") is None,
@@ -67,6 +73,17 @@ def _sparse_input(nrows: int, ncols: int, nonzeros: list[tuple[int, int, int]]) 
         "ncols": ncols,
         "entries": [{"row": r, "col": c, "value": v} for r, c, v in nonzeros],
     }
+
+
+def _mat_mul(A: list[list[int]], B: list[list[int]]) -> list[list[int]]:
+    """Plain-Python integer matrix multiplication."""
+    m = len(A)
+    n = len(A[0])
+    p = len(B[0])
+    return [
+        [sum(A[i][k] * B[k][j] for k in range(n)) for j in range(p)]
+        for i in range(m)
+    ]
 
 
 def _mat_mul(A: list[list[int]], B: list[list[int]]) -> list[list[int]]:
@@ -254,3 +271,78 @@ class TestSageVsCypari2:
 
     def test_10x10_arithmetic_rows(self):
         self._assert_same(_M_ARITHMETIC_10)
+
+
+# ---------------------------------------------------------------------------
+# SageMath HNF tests
+# ---------------------------------------------------------------------------
+
+class TestSageHNF:
+    """Test HNF computation via the sage backend."""
+
+    def test_3x3_standard(self):
+        """Standard 3x3 example: expect [[2,4,4],[0,6,0],[0,0,12]]."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        result = hermite_normal_form(_dense_input(M), backend="sage")
+        assert result.hermite_normal_form.entries == [[2, 4, 4], [0, 6, 0], [0, 0, 12]]
+
+    def test_identity_2x2(self):
+        result = hermite_normal_form(_dense_input([[1, 0], [0, 1]]), backend="sage")
+        assert result.hermite_normal_form.entries == [[1, 0], [0, 1]]
+
+    def test_zero_matrix(self):
+        result = hermite_normal_form(_dense_input([[0, 0], [0, 0]]), backend="sage")
+        assert result.hermite_normal_form.entries == [[0, 0], [0, 0]]
+
+    def test_return_type(self):
+        result = hermite_normal_form(_dense_input([[1, 0], [0, 1]]), backend="sage")
+        assert isinstance(result, HNFResult)
+        assert result.hermite_normal_form.format == "dense"
+
+    def test_hnf_with_transform(self):
+        """Test HNF with transform via sage backend."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        result = hermite_normal_form_with_transform(_dense_input(M), backend="sage")
+        assert isinstance(result, HNFWithTransformResult)
+        assert result.hermite_normal_form.entries == [[2, 4, 4], [0, 6, 0], [0, 0, 12]]
+        # Verify U·M = H
+        U = result.left_transform.entries
+        H = result.hermite_normal_form.entries
+        computed = _mat_mul(U, M)
+        assert computed == H, f"U·M={computed} != H={H}"
+
+    def test_elementary_divisors(self):
+        """Elementary divisors should match SNF invariant factors."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        ed_result = elementary_divisors(_dense_input(M), backend="sage")
+        snf_result = smith_normal_form(_dense_input(M), backend="sage")
+        assert ed_result.elementary_divisors == snf_result.invariant_factors
+
+
+# ---------------------------------------------------------------------------
+# SageMath HNF vs Flint consistency
+# ---------------------------------------------------------------------------
+
+class TestSageVsFlintHNF:
+    """Verify that sage and flint backends produce identical HNF output."""
+
+    def _assert_same_hnf(self, entries):
+        inp = _dense_input(entries)
+        sage_result = hermite_normal_form(inp, backend="sage")
+        flint_result = hermite_normal_form(inp, backend="flint")
+        assert sage_result.hermite_normal_form.entries == flint_result.hermite_normal_form.entries, (
+            f"HNF differs: sage={sage_result.hermite_normal_form.entries} "
+            f"flint={flint_result.hermite_normal_form.entries}"
+        )
+
+    def test_3x3_standard(self):
+        self._assert_same_hnf([[2, 4, 4], [-6, 6, 12], [10, -4, -16]])
+
+    def test_identity_2x2(self):
+        self._assert_same_hnf([[1, 0], [0, 1]])
+
+    def test_zero_matrix(self):
+        self._assert_same_hnf([[0, 0], [0, 0]])
+
+    def test_rank_deficient(self):
+        self._assert_same_hnf([[1, 2, 3], [4, 5, 6], [7, 8, 9]])

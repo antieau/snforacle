@@ -27,6 +27,9 @@ from pydantic import TypeAdapter
 from snforacle.backends.base import SNFBackend
 from snforacle.schema import (
     DenseIntMatrix,
+    ElementaryDivisorsResult,
+    HNFResult,
+    HNFWithTransformResult,
     IntMatrix,
     SNFResult,
     SNFWithTransformsResult,
@@ -210,3 +213,124 @@ def smith_normal_form_with_transforms(
         left_transform=_to_dense_model(left, m.nrows, m.nrows),
         right_transform=_to_dense_model(right, m.ncols, m.ncols),
     )
+
+
+def hermite_normal_form(
+    matrix: Any,
+    backend: str = "flint",
+) -> HNFResult:
+    """Compute the row Hermite Normal Form of an integer matrix.
+
+    The Hermite Normal Form is the unique upper-triangular matrix H with
+    positive pivots (smallest to largest) satisfying H = U·M for some
+    unimodular integer matrix U.
+
+    Parameters
+    ----------
+    matrix:
+        The input matrix as a ``DenseIntMatrix``, ``SparseIntMatrix``, or a
+        plain ``dict`` conforming to one of those schemas.
+    backend:
+        Name of the backend to use. Default is ``"flint"`` (cypari2 does not
+        support row HNF and raises ``NotImplementedError``).
+
+    Returns
+    -------
+    HNFResult
+        A Pydantic model with field:
+
+        ``hermite_normal_form``
+            The m×n HNF matrix as a ``DenseIntMatrix``. Upper triangular with
+            positive pivots in non-decreasing order; entries above pivots
+            satisfy 0 ≤ entry < pivot.
+    """
+    m = _parse_matrix(matrix)
+    if m.nrows == 0 or m.ncols == 0:
+        return HNFResult(
+            hermite_normal_form=_to_dense_model(m.to_dense(), m.nrows, m.ncols)
+        )
+    _check_dense_size(m.nrows, m.ncols)
+    dense = m.to_dense()
+    (hnf,) = _get_backend(backend).compute_hnf(dense, m.nrows, m.ncols)
+    return HNFResult(
+        hermite_normal_form=_to_dense_model(hnf, m.nrows, m.ncols),
+    )
+
+
+def hermite_normal_form_with_transform(
+    matrix: Any,
+    backend: str = "sage",
+) -> HNFWithTransformResult:
+    """Compute the row Hermite Normal Form together with the left unimodular transform.
+
+    Parameters
+    ----------
+    matrix:
+        The input matrix (same accepted types as :func:`hermite_normal_form`).
+    backend:
+        Name of the backend to use. Default is ``"sage"`` (flint does not
+        support transforms; cypari2 does not support row HNF).
+
+    Returns
+    -------
+    HNFWithTransformResult
+        A Pydantic model with fields:
+
+        ``hermite_normal_form``
+            The m×n HNF matrix as a ``DenseIntMatrix``.
+        ``left_transform``
+            Unimodular m×m integer matrix U.
+
+        The matrices satisfy ``U @ M = hermite_normal_form``.
+    """
+    m = _parse_matrix(matrix)
+    if m.nrows == 0 or m.ncols == 0:
+        def _identity(n):
+            return [[1 if i == j else 0 for j in range(n)] for i in range(n)]
+        return HNFWithTransformResult(
+            hermite_normal_form=_to_dense_model(m.to_dense(), m.nrows, m.ncols),
+            left_transform=_to_dense_model(_identity(m.nrows), m.nrows, m.nrows),
+        )
+    _check_dense_size(m.nrows, m.ncols)
+    dense = m.to_dense()
+    hnf, left = _get_backend(backend).compute_hnf_with_transform(
+        dense, m.nrows, m.ncols
+    )
+    return HNFWithTransformResult(
+        hermite_normal_form=_to_dense_model(hnf, m.nrows, m.ncols),
+        left_transform=_to_dense_model(left, m.nrows, m.nrows),
+    )
+
+
+def elementary_divisors(
+    matrix: Any,
+    backend: str = "cypari2",
+) -> ElementaryDivisorsResult:
+    """Compute the non-zero invariant factors (elementary divisors) of an integer matrix.
+
+    These are the diagonal entries of the Smith normal form, returned in
+    non-decreasing order. They may be computed via a potentially faster
+    dedicated path than the full SNF computation.
+
+    Parameters
+    ----------
+    matrix:
+        The input matrix (same accepted types as :func:`smith_normal_form`).
+    backend:
+        Name of the backend to use. Default is ``"cypari2"``.
+
+    Returns
+    -------
+    ElementaryDivisorsResult
+        A Pydantic model with field:
+
+        ``elementary_divisors``
+            Non-zero invariant factors in non-decreasing order.
+    """
+    m = _parse_matrix(matrix)
+    if m.nrows == 0 or m.ncols == 0:
+        return ElementaryDivisorsResult(elementary_divisors=[])
+    _check_dense_size(m.nrows, m.ncols)
+    dense = m.to_dense()
+    ed = _get_backend(backend).compute_elementary_divisors(dense, m.nrows, m.ncols)
+    return ElementaryDivisorsResult(elementary_divisors=ed)

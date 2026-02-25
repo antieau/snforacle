@@ -49,3 +49,27 @@ class FlintBackend(SNFBackend):
         raise NotImplementedError(
             "Python-FLINT does not currently support SNF with transformation matrices."
         )
+
+    def compute_hnf(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> tuple[list[list[int]]]:
+        flint = _flint()
+        mat = flint.fmpz_mat(matrix)
+        H = mat.hnf()
+        hnf_entries = [[int(H[i, j]) for j in range(ncols)] for i in range(nrows)]
+        return (hnf_entries,)
+
+    def compute_hnf_with_transform(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> tuple[list[list[int]], list[list[int]]]:
+        raise NotImplementedError(
+            "Python-FLINT 0.8.0 does not expose hnf_transform(). "
+            "Use the sage or magma backend for HNF with transform."
+        )
+
+    def compute_elementary_divisors(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> list[int]:
+        # Elementary divisors are the non-zero diagonal entries of SNF
+        snf_entries, inv_factors = self.compute_snf(matrix, nrows, ncols)
+        return inv_factors

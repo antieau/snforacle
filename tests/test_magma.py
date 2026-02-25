@@ -4,8 +4,14 @@ import shutil
 
 import pytest
 
-from snforacle import smith_normal_form, smith_normal_form_with_transforms
-from snforacle.schema import SNFResult, SNFWithTransformsResult
+from snforacle import (
+    elementary_divisors,
+    hermite_normal_form,
+    hermite_normal_form_with_transform,
+    smith_normal_form,
+    smith_normal_form_with_transforms,
+)
+from snforacle.schema import HNFResult, HNFWithTransformResult, SNFResult, SNFWithTransformsResult
 
 pytestmark = pytest.mark.skipif(
     shutil.which("magma") is None,
@@ -312,3 +318,78 @@ class TestMagmaVsCypari2:
 
     def test_10x10_arithmetic_rows(self):
         self._assert_same(_M_ARITHMETIC_10)
+
+
+# ---------------------------------------------------------------------------
+# MAGMA HNF tests
+# ---------------------------------------------------------------------------
+
+class TestMagmaHNF:
+    """Test HNF computation via the magma backend."""
+
+    def test_3x3_standard(self):
+        """Standard 3x3 example: expect [[2,4,4],[0,6,0],[0,0,12]]."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        result = hermite_normal_form(_dense_input(M), backend="magma")
+        assert result.hermite_normal_form.entries == [[2, 4, 4], [0, 6, 0], [0, 0, 12]]
+
+    def test_identity_2x2(self):
+        result = hermite_normal_form(_dense_input([[1, 0], [0, 1]]), backend="magma")
+        assert result.hermite_normal_form.entries == [[1, 0], [0, 1]]
+
+    def test_zero_matrix(self):
+        result = hermite_normal_form(_dense_input([[0, 0], [0, 0]]), backend="magma")
+        assert result.hermite_normal_form.entries == [[0, 0], [0, 0]]
+
+    def test_return_type(self):
+        result = hermite_normal_form(_dense_input([[1, 0], [0, 1]]), backend="magma")
+        assert isinstance(result, HNFResult)
+        assert result.hermite_normal_form.format == "dense"
+
+    def test_hnf_with_transform(self):
+        """Test HNF with transform via magma backend."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        result = hermite_normal_form_with_transform(_dense_input(M), backend="magma")
+        assert isinstance(result, HNFWithTransformResult)
+        assert result.hermite_normal_form.entries == [[2, 4, 4], [0, 6, 0], [0, 0, 12]]
+        # Verify U·M = H
+        U = result.left_transform.entries
+        H = result.hermite_normal_form.entries
+        computed = _mat_mul(U, M)
+        assert computed == H, f"U·M={computed} != H={H}"
+
+    def test_elementary_divisors(self):
+        """Elementary divisors should match SNF invariant factors."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        ed_result = elementary_divisors(_dense_input(M), backend="magma")
+        snf_result = smith_normal_form(_dense_input(M), backend="magma")
+        assert ed_result.elementary_divisors == snf_result.invariant_factors
+
+
+# ---------------------------------------------------------------------------
+# MAGMA HNF vs Flint consistency
+# ---------------------------------------------------------------------------
+
+class TestMagmaVsFlintHNF:
+    """Verify that magma and flint backends produce identical HNF output."""
+
+    def _assert_same_hnf(self, entries):
+        inp = _dense_input(entries)
+        magma_result = hermite_normal_form(inp, backend="magma")
+        flint_result = hermite_normal_form(inp, backend="flint")
+        assert magma_result.hermite_normal_form.entries == flint_result.hermite_normal_form.entries, (
+            f"HNF differs: magma={magma_result.hermite_normal_form.entries} "
+            f"flint={flint_result.hermite_normal_form.entries}"
+        )
+
+    def test_3x3_standard(self):
+        self._assert_same_hnf([[2, 4, 4], [-6, 6, 12], [10, -4, -16]])
+
+    def test_identity_2x2(self):
+        self._assert_same_hnf([[1, 0], [0, 1]])
+
+    def test_zero_matrix(self):
+        self._assert_same_hnf([[0, 0], [0, 0]])
+
+    def test_rank_deficient(self):
+        self._assert_same_hnf([[1, 2, 3], [4, 5, 6], [7, 8, 9]])

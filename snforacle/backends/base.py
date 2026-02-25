@@ -54,3 +54,55 @@ class SNFBackend(ABC):
 
         The matrices satisfy ``U @ M @ V = snf_matrix``.
         """
+
+    @abstractmethod
+    def compute_hnf(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> tuple[list[list[int]]]:
+        """Return the row Hermite Normal Form of the matrix.
+
+        Parameters
+        ----------
+        matrix:
+            Dense integer matrix as a list of rows.
+        nrows, ncols:
+            Dimensions of *matrix*.
+
+        Returns
+        -------
+        hnf_matrix:
+            The m×n Hermite Normal Form matrix: upper triangular with
+            positive pivots in non-decreasing order from top-left to
+            bottom-right. Entries above pivots satisfy 0 ≤ entry < pivot.
+            All other entries are zero.
+        """
+
+    @abstractmethod
+    def compute_hnf_with_transform(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> tuple[list[list[int]], list[list[int]]]:
+        """Return the row HNF together with the left unimodular transform.
+
+        Returns
+        -------
+        hnf_matrix:
+            The m×n Hermite Normal Form matrix (same convention as above).
+        left_transform:
+            Unimodular m×m integer matrix U.
+
+        The matrices satisfy ``U @ M = hnf_matrix``.
+        """
+
+    @abstractmethod
+    def compute_elementary_divisors(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> list[int]:
+        """Return the non-zero invariant factors (elementary divisors).
+
+        Returns
+        -------
+        elementary_divisors:
+            The non-zero diagonal entries of the Smith normal form in
+            non-decreasing order. Equivalent to the invariant_factors from
+            compute_snf, but potentially computed via a faster dedicated path.
+        """

@@ -170,3 +170,27 @@ class Cypari2Backend(SNFBackend):
         V_prime = _mat_mul(V, Q)
 
         return D_std, inv_factors, U_prime, V_prime
+
+    def compute_hnf(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> tuple[list[list[int]]]:
+        raise NotImplementedError(
+            "The cypari2 backend does not support row HNF. PARI's mathnf() computes "
+            "the column HNF (H = M·U) which uses an incompatible convention. "
+            "Use the flint, sage, or magma backend instead."
+        )
+
+    def compute_hnf_with_transform(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> tuple[list[list[int]], list[list[int]]]:
+        raise NotImplementedError(
+            "The cypari2 backend does not support row HNF. "
+            "Use the sage or magma backend for HNF with transform."
+        )
+
+    def compute_elementary_divisors(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> list[int]:
+        pari = _pari()
+        pari_mat = self._to_pari_matrix(matrix, nrows, ncols)
+        return _extract_invariant_factors(pari_mat)

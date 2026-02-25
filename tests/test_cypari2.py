@@ -5,10 +5,11 @@ import pytest
 from snforacle import (
     DenseIntMatrix,
     SparseIntMatrix,
+    elementary_divisors,
     smith_normal_form,
     smith_normal_form_with_transforms,
 )
-from snforacle.schema import SNFResult, SNFWithTransformsResult
+from snforacle.schema import ElementaryDivisorsResult, SNFResult, SNFWithTransformsResult
 
 
 # ---------------------------------------------------------------------------
@@ -251,3 +252,70 @@ class TestSNFWithTransforms:
         result = smith_normal_form_with_transforms(_dense_input(_M_ARITHMETIC_10))
         assert result.invariant_factors == [1, 10]
         self._verify_factorisation(_M_ARITHMETIC_10, result)
+
+
+# ---------------------------------------------------------------------------
+# Elementary divisors tests
+# ---------------------------------------------------------------------------
+
+class TestElementaryDivisors:
+    def test_3x3_standard(self):
+        # Same as SNF test: [2, 6, 12]
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        result = elementary_divisors(_dense_input(M), backend="cypari2")
+        assert result.elementary_divisors == [2, 6, 12]
+
+    def test_zero_matrix(self):
+        result = elementary_divisors(_dense_input([[0, 0], [0, 0]]))
+        assert result.elementary_divisors == []
+
+    def test_identity(self):
+        result = elementary_divisors(_dense_input([[1, 0], [0, 1]]))
+        assert result.elementary_divisors == [1, 1]
+
+    def test_rank_deficient(self):
+        M = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+        result = elementary_divisors(_dense_input(M))
+        assert result.elementary_divisors == [1, 3]
+
+    def test_return_type(self):
+        result = elementary_divisors(_dense_input([[1, 0], [0, 1]]))
+        assert isinstance(result, ElementaryDivisorsResult)
+
+    def test_matches_snf(self):
+        """Elementary divisors should match SNF invariant factors."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        ed_result = elementary_divisors(_dense_input(M))
+        snf_result = smith_normal_form(_dense_input(M))
+        assert ed_result.elementary_divisors == snf_result.invariant_factors
+
+    def test_matches_snf_rank_deficient(self):
+        """Test that ED == invariant_factors for rank-deficient matrices."""
+        M = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+        ed_result = elementary_divisors(_dense_input(M))
+        snf_result = smith_normal_form(_dense_input(M))
+        assert ed_result.elementary_divisors == snf_result.invariant_factors
+
+
+# ---------------------------------------------------------------------------
+# HNF tests for cypari2 (should raise NotImplementedError)
+# ---------------------------------------------------------------------------
+
+class TestCypari2HNF:
+    def test_hnf_not_implemented(self):
+        """cypari2 backend should raise NotImplementedError for HNF."""
+        from snforacle import hermite_normal_form
+
+        M = _dense_input([[2, 4, 4], [-6, 6, 12], [10, -4, -16]])
+        with pytest.raises(NotImplementedError) as exc_info:
+            hermite_normal_form(M, backend="cypari2")
+        assert "hnf" in str(exc_info.value).lower()
+
+    def test_hnf_with_transform_not_implemented(self):
+        """cypari2 backend should raise NotImplementedError for HNF with transform."""
+        from snforacle import hermite_normal_form_with_transform
+
+        M = _dense_input([[2, 4, 4], [-6, 6, 12], [10, -4, -16]])
+        with pytest.raises(NotImplementedError) as exc_info:
+            hermite_normal_form_with_transform(M, backend="cypari2")
+        assert "hnf" in str(exc_info.value).lower()

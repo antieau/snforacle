@@ -23,7 +23,8 @@ from typing import Any
 
 _SIZES = [10, 20, 30, 50, 75]
 _BACKENDS = ["cypari2", "flint", "sage", "magma"]
-_NO_TRANSFORMS = {"flint"}  # backends that don't support transforms
+_NO_TRANSFORMS = {"flint"}  # backends that don't support SNF/HNF transforms
+_NO_HNF = {"cypari2"}  # backends that don't support HNF (incompatible convention)
 _TIMEOUT = 120  # seconds
 _REPEATS_SMALL = 3   # sizes <= 100
 _REPEATS_LARGE = 1   # sizes > 100
@@ -95,10 +96,24 @@ def _alarm_handler(signum, frame):
 
 def _time_backend(
     name: str, matrix: list[list[int]], n: int, timeout: int,
-    *, transforms: bool = False,
+    *, mode: str = "snf", transforms: bool = False,
 ) -> float | str:
-    """Time a single SNF call; return elapsed seconds or 'timeout'/'error'."""
-    from snforacle import smith_normal_form, smith_normal_form_with_transforms  # noqa: PLC0415
+    """Time a single computation; return elapsed seconds or 'timeout'/'error'.
+
+    Parameters
+    ----------
+    mode:
+        'snf', 'hnf', or 'ed' (elementary divisors).
+    transforms:
+        Only used for SNF and HNF modes.
+    """
+    from snforacle import (  # noqa: PLC0415
+        elementary_divisors,
+        hermite_normal_form,
+        hermite_normal_form_with_transform,
+        smith_normal_form,
+        smith_normal_form_with_transforms,
+    )
 
     inp = {
         "format": "dense",
@@ -107,7 +122,14 @@ def _time_backend(
         "entries": matrix,
     }
 
-    fn = smith_normal_form_with_transforms if transforms else smith_normal_form
+    if mode == "snf":
+        fn = smith_normal_form_with_transforms if transforms else smith_normal_form
+    elif mode == "hnf":
+        fn = hermite_normal_form_with_transform if transforms else hermite_normal_form
+    elif mode == "ed":
+        fn = elementary_divisors
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
 
     # Use signal.alarm on Unix for Python backends; CLI backends handle their
     # own timeout via subprocess.TimeoutExpired.
@@ -135,14 +157,14 @@ def _time_backend(
 
 def _run_benchmark(
     name: str, size: int, variant: str, matrix: list[list[int]],
-    *, transforms: bool = False,
+    *, mode: str = "snf", transforms: bool = False,
 ) -> str:
     """Run timed benchmark(s) for one (backend, size, variant) combination."""
     repeats = _REPEATS_SMALL if size <= _THRESHOLD_REPEATS else _REPEATS_LARGE
     times: list[float] = []
 
     for _ in range(repeats):
-        result = _time_backend(name, matrix, size, _TIMEOUT, transforms=transforms)
+        result = _time_backend(name, matrix, size, _TIMEOUT, mode=mode, transforms=transforms)
         if isinstance(result, str):
             return result  # 'timeout' or 'error: ...'
         times.append(result)
@@ -202,21 +224,26 @@ def main() -> None:
         dense_matrix = _make_dense_matrix(size)
         sparse_matrix = _make_sparse_matrix(size)
 
-        for variant, matrix, transforms in [
-            ("dense", dense_matrix, False),
-            ("sparse", sparse_matrix, False),
-            ("dense+transforms", dense_matrix, True),
-            ("sparse+transforms", sparse_matrix, True),
+        for variant, matrix, mode, transforms in [
+            ("dense", dense_matrix, "snf", False),
+            ("sparse", sparse_matrix, "snf", False),
+            ("dense+transform", dense_matrix, "snf", True),
+            ("sparse+transform", sparse_matrix, "snf", True),
+            ("dense+hnf", dense_matrix, "hnf", False),
+            ("dense+hnf+transform", dense_matrix, "hnf", True),
+            ("dense+ed", dense_matrix, "ed", False),
         ]:
             for backend in _BACKENDS:
                 if not available[backend]:
                     result_str = "N/A"
                 elif transforms and backend in _NO_TRANSFORMS:
                     result_str = "N/A"
+                elif mode == "hnf" and backend in _NO_HNF:
+                    result_str = "N/A"
                 else:
                     print(f"  {backend:8s} n={size:6d} {variant} ...", end="", flush=True)
                     result_str = _run_benchmark(
-                        backend, size, variant, matrix, transforms=transforms,
+                        backend, size, variant, matrix, mode=mode, transforms=transforms,
                     )
                     print(f" {result_str}")
                 rows.append((backend, str(size), variant, result_str))

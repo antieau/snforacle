@@ -1,6 +1,6 @@
 # snforacle
 
-Smith normal form (SNF) of integer matrices via a uniform JSON interface, with pluggable backends: PARI/GP (cypari2), FLINT (python-flint), SageMath (CLI subprocess), and MAGMA (CLI subprocess).
+Smith normal form (SNF), Hermite normal form (HNF), and elementary divisors of integer matrices via a uniform JSON interface, with pluggable backends: PARI/GP (cypari2), FLINT (python-flint), SageMath (CLI subprocess), and MAGMA (CLI subprocess).
 
 ## Common Commands
 
@@ -23,15 +23,16 @@ python benchmarks/bench.py
 ```
 snforacle/
 ├── __init__.py        # Public API: smith_normal_form, smith_normal_form_with_transforms,
-│                      #   DenseIntMatrix, SparseIntMatrix, SNFResult, SNFWithTransformsResult
+│                      #   hermite_normal_form, hermite_normal_form_with_transform,
+│                      #   elementary_divisors; plus result models and input schemas
 ├── interface.py       # Entry-point functions; dispatches to backends
 ├── schema.py          # Pydantic v2 input/output models
 └── backends/
     ├── base.py        # Abstract SNFBackend base class
-    ├── cypari2.py     # PARI/GP backend (default)
-    ├── flint.py       # FLINT backend (SNF only; transforms not supported)
-    ├── sage.py        # SageMath CLI backend (requires `sage` on PATH)
-    └── magma.py       # MAGMA CLI backend (requires `magma` on PATH)
+    ├── cypari2.py     # PARI/GP backend (default for SNF/ED; no HNF)
+    ├── flint.py       # FLINT backend (SNF+ED+HNF; no transforms)
+    ├── sage.py        # SageMath CLI backend (all operations)
+    └── magma.py       # MAGMA CLI backend (all operations)
 tests/
 ├── test_cypari2.py    # Schema validation, SNF correctness, transform tests
 ├── test_flint.py      # Flint tests + cross-backend consistency
@@ -54,14 +55,17 @@ benchmarks/
 
 ## Backend Capabilities
 
-| Backend | SNF | Transforms | How installed |
-|---------|-----|------------|---------------|
-| `cypari2` | yes | yes | `pip install snforacle[cypari2]` |
-| `flint`   | yes | no  | `pip install snforacle[flint]` |
-| `sage`    | yes | yes | SageMath installed separately; `sage` on PATH |
-| `magma`   | yes | yes | MAGMA installed separately; `magma` on PATH |
+| Backend | SNF | SNF+T | HNF | HNF+T | Elem. Div. | How installed |
+|---------|-----|-------|-----|-------|-----------|---------------|
+| `cypari2` | yes | yes   | no  | no    | yes       | `pip install snforacle[cypari2]` |
+| `flint`   | yes | no    | yes | no    | yes       | `pip install snforacle[flint]` |
+| `sage`    | yes | yes   | yes | yes   | yes       | SageMath on PATH |
+| `magma`   | yes | yes   | yes | yes   | yes       | MAGMA on PATH |
 
-MAGMA raises `ValueError` for matrices where `nrows * ncols > 10_000_000` (embedding that many integers inline in a script is impractical).
+**Notes:**
+- `cypari2` does not support row HNF (PARI's `mathnf()` computes the column HNF with incompatible convention).
+- `flint` does not support SNF/HNF with transforms (python-flint 0.8.0 limitation).
+- `magma` raises `ValueError` for matrices where `nrows * ncols > 10_000_000` (inline script embedding limitation).
 
 ## Optional Extras
 

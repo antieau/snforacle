@@ -30,6 +30,31 @@ printf "\\n";
 quit;
 """
 
+_MAGMA_HNF_TEMPLATE = """\
+_m := {nrows};
+_n := {ncols};
+_A := Matrix(IntegerRing(), _m, _n, [{flat_csv}]);
+_H, _U := HermiteForm(_A);
+printf "HNF";
+for _i in [1.._m] do for _j in [1.._n] do printf " %o", _H[_i,_j]; end for; end for;
+printf "\\n";
+printf "LEFT";
+for _i in [1.._m] do for _j in [1.._m] do printf " %o", _U[_i,_j]; end for; end for;
+printf "\\n";
+quit;
+"""
+
+_MAGMA_ED_TEMPLATE = """\
+_m := {nrows};
+_n := {ncols};
+_A := Matrix(IntegerRing(), _m, _n, [{flat_csv}]);
+_divs := ElementaryDivisors(_A);
+printf "ED";
+for _d in _divs do printf " %o", _d; end for;
+printf "\\n";
+quit;
+"""
+
 _SIZE_GUARD = 10_000_000  # max elements to embed inline in the script
 
 
@@ -43,11 +68,11 @@ def _require_magma() -> str:
     return magma_bin
 
 
-def _build_magma_script(flat: list[int], nrows: int, ncols: int) -> str:
+def _build_magma_script(
+    flat: list[int], nrows: int, ncols: int, template: str = _MAGMA_SCRIPT_TEMPLATE
+) -> str:
     flat_csv = ", ".join(str(x) for x in flat)
-    return _MAGMA_SCRIPT_TEMPLATE.format(
-        nrows=nrows, ncols=ncols, flat_csv=flat_csv
-    )
+    return template.format(nrows=nrows, ncols=ncols, flat_csv=flat_csv)
 
 
 def _reshape(flat_ints: list[int], rows: int, cols: int) -> list[list[int]]:
@@ -145,6 +170,79 @@ def _parse_magma_output(stdout: str, nrows: int, ncols: int) -> dict:
     }
 
 
+def _parse_magma_hnf_output(stdout: str, nrows: int, ncols: int) -> dict:
+    """Parse HNF, LEFT lines from MAGMA output.
+
+    Handles line wrapping caused by very long output.
+    """
+    hnf_flat: list[int] | None = None
+    left_flat: list[int] | None = None
+
+    current_block_name = None
+    current_block_values = []
+
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        # Check for new block marker
+        if line.startswith("HNF"):
+            # Save previous block if any
+            if current_block_name == "HNF":
+                hnf_flat = current_block_values
+            elif current_block_name == "LEFT":
+                left_flat = current_block_values
+
+            # Start new HNF block
+            current_block_name = "HNF"
+            current_block_values = [int(x) for x in line[3:].split()]
+
+        elif line.startswith("LEFT"):
+            # Save previous block
+            if current_block_name == "HNF":
+                hnf_flat = current_block_values
+            elif current_block_name == "LEFT":
+                left_flat = current_block_values
+
+            # Start new LEFT block
+            current_block_name = "LEFT"
+            current_block_values = [int(x) for x in line[4:].split()]
+
+        else:
+            # Continuation line: append values to current block
+            if current_block_name is not None:
+                current_block_values.extend([int(x) for x in line.split()])
+
+    # Save the last block
+    if current_block_name == "HNF":
+        hnf_flat = current_block_values
+    elif current_block_name == "LEFT":
+        left_flat = current_block_values
+
+    if hnf_flat is None or left_flat is None:
+        raise ValueError(
+            f"Could not parse MAGMA HNF output. Expected HNF/LEFT lines.\n"
+            f"stdout was:\n{stdout}"
+        )
+
+    return {
+        "hnf": _reshape(hnf_flat, nrows, ncols),
+        "left": _reshape(left_flat, nrows, nrows),
+    }
+
+
+def _parse_magma_ed_output(stdout: str) -> dict:
+    """Parse ED line from MAGMA output."""
+    for line in stdout.splitlines():
+        line = line.strip()
+        if line.startswith("ED"):
+            ed_flat = [int(x) for x in line[2:].split()]
+            return {"elementary_divisors": ed_flat}
+
+    raise ValueError(f"Could not parse MAGMA ED output. stdout was:\n{stdout}")
+
+
 def _extract_invariant_factors_from_snf(
     snf: list[list[int]], nrows: int, ncols: int
 ) -> list[int]:
@@ -165,7 +263,13 @@ class MagmaBackend(SNFBackend):
     def __init__(self) -> None:
         self._magma_bin = _require_magma()
 
-    def _run(self, matrix: list[list[int]], nrows: int, ncols: int) -> dict:
+    def _run(
+        self,
+        matrix: list[list[int]],
+        nrows: int,
+        ncols: int,
+        template: str = _MAGMA_SCRIPT_TEMPLATE,
+    ) -> dict:
         if nrows * ncols > _SIZE_GUARD:
             raise ValueError(
                 f"Matrix is too large for the MAGMA backend: {nrows}×{ncols} = "
@@ -173,7 +277,7 @@ class MagmaBackend(SNFBackend):
                 "Embedding this many integers inline in a MAGMA script is impractical."
             )
         flat = [matrix[r][c] for r in range(nrows) for c in range(ncols)]
-        script_text = _build_magma_script(flat, nrows, ncols)
+        script_text = _build_magma_script(flat, nrows, ncols, template=template)
         with tempfile.TemporaryDirectory() as tmpdir:
             script_path = str(Path(tmpdir) / "snf_script.m")
             try:
@@ -190,7 +294,14 @@ class MagmaBackend(SNFBackend):
                         f"MAGMA subprocess failed (exit {result.returncode}).\n"
                         f"stderr: {result.stderr}"
                     )
-                return _parse_magma_output(result.stdout, nrows, ncols)
+                if template == _MAGMA_SCRIPT_TEMPLATE:
+                    return _parse_magma_output(result.stdout, nrows, ncols)
+                elif template == _MAGMA_HNF_TEMPLATE:
+                    return _parse_magma_hnf_output(result.stdout, nrows, ncols)
+                elif template == _MAGMA_ED_TEMPLATE:
+                    return _parse_magma_ed_output(result.stdout)
+                else:
+                    raise ValueError(f"Unknown MAGMA template: {template}")
             except subprocess.TimeoutExpired as exc:
                 raise TimeoutError(
                     f"MAGMA did not complete within {_TIMEOUT}s."
@@ -210,3 +321,21 @@ class MagmaBackend(SNFBackend):
         snf = data["snf"]
         inv = _extract_invariant_factors_from_snf(snf, nrows, ncols)
         return snf, inv, data["left"], data["right"]
+
+    def compute_hnf(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> tuple[list[list[int]]]:
+        data = self._run(matrix, nrows, ncols, template=_MAGMA_HNF_TEMPLATE)
+        return (data["hnf"],)
+
+    def compute_hnf_with_transform(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> tuple[list[list[int]], list[list[int]]]:
+        data = self._run(matrix, nrows, ncols, template=_MAGMA_HNF_TEMPLATE)
+        return data["hnf"], data["left"]
+
+    def compute_elementary_divisors(
+        self, matrix: list[list[int]], nrows: int, ncols: int
+    ) -> list[int]:
+        data = self._run(matrix, nrows, ncols, template=_MAGMA_ED_TEMPLATE)
+        return data["elementary_divisors"]

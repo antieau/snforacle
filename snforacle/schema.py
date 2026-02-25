@@ -146,3 +146,39 @@ class SNFWithTransformsResult(BaseModel):
     invariant_factors: list[int]
     left_transform: DenseIntMatrix
     right_transform: DenseIntMatrix
+
+
+class HNFResult(BaseModel):
+    """Row Hermite Normal Form of an integer matrix.
+
+    The Hermite Normal Form is the unique upper-triangular matrix H with
+    positive pivots (smallest to largest) satisfying H = U·M for some
+    unimodular integer matrix U.
+    """
+
+    hermite_normal_form: DenseIntMatrix
+
+
+class HNFWithTransformResult(BaseModel):
+    """Row Hermite Normal Form together with the left unimodular transform.
+
+    Let M be the input matrix.  The matrices satisfy::
+
+        left_transform · M = hermite_normal_form
+
+    Both matrices are returned as dense integer matrices.
+    """
+
+    hermite_normal_form: DenseIntMatrix
+    left_transform: DenseIntMatrix
+
+
+class ElementaryDivisorsResult(BaseModel):
+    """Non-zero invariant factors of an integer matrix.
+
+    These are the same values as the diagonal of the Smith normal form,
+    returned in non-decreasing order. They can be computed via a potentially
+    faster dedicated path than the full SNF computation.
+    """
+
+    elementary_divisors: list[int]

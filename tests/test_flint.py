@@ -2,8 +2,14 @@
 
 import pytest
 
-from snforacle import smith_normal_form, smith_normal_form_with_transforms
-from snforacle.schema import SNFResult
+from snforacle import (
+    elementary_divisors,
+    hermite_normal_form,
+    hermite_normal_form_with_transform,
+    smith_normal_form,
+    smith_normal_form_with_transforms,
+)
+from snforacle.schema import HNFResult, SNFResult
 
 
 # ---------------------------------------------------------------------------
@@ -188,3 +194,64 @@ class TestFlintVsCypari2:
 
     def test_10x10_arithmetic_rows(self):
         self._assert_same(_M_ARITHMETIC_10)
+
+
+# ---------------------------------------------------------------------------
+# Flint HNF tests
+# ---------------------------------------------------------------------------
+
+class TestFlintHNF:
+    """Test HNF computation via the flint backend."""
+
+    def test_3x3_standard(self):
+        """Standard 3x3 example: expect [[2,4,4],[0,6,0],[0,0,12]]."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        result = hermite_normal_form(_dense_input(M), backend="flint")
+        assert result.hermite_normal_form.entries == [[2, 4, 4], [0, 6, 0], [0, 0, 12]]
+
+    def test_identity_2x2(self):
+        result = hermite_normal_form(_dense_input([[1, 0], [0, 1]]), backend="flint")
+        assert result.hermite_normal_form.entries == [[1, 0], [0, 1]]
+
+    def test_zero_matrix(self):
+        result = hermite_normal_form(_dense_input([[0, 0], [0, 0]]), backend="flint")
+        assert result.hermite_normal_form.entries == [[0, 0], [0, 0]]
+
+    def test_rank_deficient(self):
+        """Rank-deficient matrix should have zero rows at bottom."""
+        M = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+        result = hermite_normal_form(_dense_input(M), backend="flint")
+        H = result.hermite_normal_form.entries
+        # HNF should be upper triangular with pivots on diagonal
+        # The zero rows should appear at the bottom
+        assert all(H[i][j] == 0 for i in range(len(H)) for j in range(i) if H[i][i] == 0)
+
+    def test_non_square_2x3(self):
+        M = [[1, 2, 3], [4, 5, 6]]
+        result = hermite_normal_form(_dense_input(M), backend="flint")
+        H = result.hermite_normal_form.entries
+        assert len(H) == 2 and len(H[0]) == 3
+
+    def test_non_square_3x2(self):
+        M = [[1, 4], [2, 5], [3, 6]]
+        result = hermite_normal_form(_dense_input(M), backend="flint")
+        H = result.hermite_normal_form.entries
+        assert len(H) == 3 and len(H[0]) == 2
+
+    def test_return_type(self):
+        result = hermite_normal_form(_dense_input([[1, 0], [0, 1]]), backend="flint")
+        assert isinstance(result, HNFResult)
+        assert result.hermite_normal_form.format == "dense"
+
+    def test_hnf_with_transform_not_implemented(self):
+        """Flint 0.8.0 does not expose hnf_transform."""
+        M = _dense_input([[2, 4, 4], [-6, 6, 12], [10, -4, -16]])
+        with pytest.raises(NotImplementedError):
+            hermite_normal_form_with_transform(M, backend="flint")
+
+    def test_elementary_divisors_matches_snf(self):
+        """Elementary divisors should match SNF invariant factors."""
+        M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
+        ed_result = elementary_divisors(_dense_input(M), backend="flint")
+        snf_result = smith_normal_form(_dense_input(M), backend="flint")
+        assert ed_result.elementary_divisors == snf_result.invariant_factors
