@@ -1,6 +1,6 @@
 # snforacle
 
-Smith normal form (SNF), Hermite normal form (HNF), and elementary divisors of integer matrices via a uniform JSON interface, with pluggable backends: PARI/GP (cypari2), FLINT (python-flint), SageMath (CLI subprocess), and MAGMA (CLI subprocess).
+Smith normal form (SNF), Hermite normal form (HNF), and elementary divisors of integer matrices via a uniform JSON interface, with pluggable backends: PARI/GP (cypari2), FLINT (python-flint), SageMath (CLI subprocess), MAGMA (CLI subprocess), and a pure Python reference implementation.
 
 ## Common Commands
 
@@ -32,12 +32,14 @@ snforacle/
     ├── cypari2.py     # PARI/GP backend (default for SNF/ED; no HNF)
     ├── flint.py       # FLINT backend (SNF+ED+HNF; no transforms)
     ├── sage.py        # SageMath CLI backend (all operations)
-    └── magma.py       # MAGMA CLI backend (all operations)
+    ├── magma.py       # MAGMA CLI backend (all operations)
+    └── pure_python.py # Pure Python reference implementation (all operations; no dependencies)
 tests/
 ├── test_cypari2.py    # Schema validation, SNF correctness, transform tests
 ├── test_flint.py      # Flint tests + cross-backend consistency
 ├── test_sage.py       # Sage tests + cross-backend consistency (skipped if no sage)
-└── test_magma.py      # MAGMA tests + cross-backend consistency (skipped if no magma)
+├── test_magma.py      # MAGMA tests + cross-backend consistency (skipped if no magma)
+└── test_pure_python.py # Pure Python backend tests + cross-backend consistency
 benchmarks/
 ├── __init__.py
 └── bench.py           # Timing suite: dense+sparse, 6 sizes, all backends
@@ -61,11 +63,13 @@ benchmarks/
 | `flint`   | yes | no    | yes | no    | yes       | `pip install snforacle[flint]` |
 | `sage`    | yes | yes   | yes | yes   | yes       | SageMath on PATH |
 | `magma`   | yes | yes   | yes | yes   | yes       | MAGMA on PATH |
+| `pure_python` | yes | yes | yes | yes | yes | stdlib only (no external dependencies) |
 
 **Notes:**
 - `cypari2` does not support row HNF (PARI's `mathnf()` computes the column HNF with incompatible convention).
 - `flint` does not support SNF/HNF with transforms (python-flint 0.8.0 limitation).
 - `magma` raises `ValueError` for matrices where `nrows * ncols > 10_000_000` (inline script embedding limitation).
+- `pure_python` is an educational reference implementation with O(n⁴) complexity; suitable for small matrices and testing only.
 
 ## Optional Extras
 

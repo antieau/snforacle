@@ -80,10 +80,17 @@ def _lazy_register_magma() -> None:
     _register("magma", MagmaBackend)
 
 
+def _lazy_register_pure_python() -> None:
+    from snforacle.backends.pure_python import PurePythonBackend
+
+    _register("pure_python", PurePythonBackend)
+
+
 _lazy_register_cypari2()
 _lazy_register_flint()
 _lazy_register_sage()
 _lazy_register_magma()
+_lazy_register_pure_python()
 
 # ---------------------------------------------------------------------------
 # Input normalisation

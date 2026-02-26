@@ -16,6 +16,7 @@ The **elementary divisors** are the non-zero diagonal entries of the SNF, return
 | `flint` | `pip install snforacle[flint]` | yes | no | yes | no | yes |
 | `sage` | SageMath on PATH | yes | yes | yes | yes | yes |
 | `magma` | MAGMA on PATH | yes | yes | yes | yes | yes |
+| `pure_python` | none (stdlib only) | yes | yes | yes | yes | yes |
 
 All backends accept the same input and return the same output types. Backends that are unavailable raise a clear error when first used.
 
