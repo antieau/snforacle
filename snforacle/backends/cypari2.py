@@ -2,7 +2,46 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from snforacle.backends.base import SNFBackend
+
+_CACHE_TABLE_PATH = Path(__file__).parent / "pari_cache_table.json"
+_cache_table: list[dict] | None = None
+
+
+def _load_cache_table() -> list[dict]:
+    global _cache_table
+    if _cache_table is None:
+        try:
+            data = json.loads(_CACHE_TABLE_PATH.read_text())
+            _cache_table = data["entries"]
+        except Exception:
+            _cache_table = []
+    return _cache_table
+
+
+def _l1_norm(matrix: list[list[int]], nrows: int, ncols: int) -> int:
+    """Return the sum of absolute values of all matrix entries."""
+    return sum(abs(matrix[r][c]) for r in range(nrows) for c in range(ncols))
+
+
+def _needed_cache_mb(nrows: int, ncols: int, l1_norm: int) -> int:
+    """Look up the minimum PARI stack size in MB for a matrix of this shape and norm."""
+    n = max(nrows, ncols)
+    cells = nrows * ncols
+    try:
+        l1_per_cell = l1_norm / cells if cells > 0 else 0.0
+    except (OverflowError, ZeroDivisionError):
+        return 512  # huge integers; use maximum fallback
+    entries = _load_cache_table()
+    qualifying = [
+        e["cache_mb"]
+        for e in entries
+        if e["max_n"] >= n and e["l1_per_cell"] >= l1_per_cell
+    ]
+    return min(qualifying) if qualifying else 512
 
 
 def _pari():
@@ -17,10 +56,24 @@ def _pari():
         ) from exc
     if not hasattr(_pari, "_instance"):
         _pari._instance = cypari2.Pari()
-        # Default 8 MB stack is too small for matrices ~1000×1000.
-        # Allocate 128 MB to handle matrices up to ~5000×5000.
+        # Start with a modest allocation; _ensure_pari_stack grows it per-call.
         _pari._instance.allocatemem(128 * 1024 * 1024, silent=True)
     return _pari._instance
+
+
+def _ensure_pari_stack(nrows: int, ncols: int, l1_norm: int) -> None:
+    """Grow the PARI stack if the current size is insufficient for this matrix."""
+    needed = _needed_cache_mb(nrows, ncols, l1_norm) * 1024 * 1024
+    p = _pari()
+    try:
+        current = p.stacksizemax()
+    except AttributeError:
+        try:
+            current = p.parisize()
+        except AttributeError:
+            current = 0
+    if current < needed:
+        p.allocatemem(needed, silent=True)
 
 
 def _gen_matrix_to_list(gen, nrows: int, ncols: int) -> list[list[int]]:
@@ -143,6 +196,7 @@ class Cypari2Backend(SNFBackend):
     def compute_snf(
         self, matrix: list[list[int]], nrows: int, ncols: int
     ) -> tuple[list[list[int]], list[int]]:
+        _ensure_pari_stack(nrows, ncols, _l1_norm(matrix, nrows, ncols))
         pari_mat = self._to_pari_matrix(matrix, nrows, ncols)
         inv_factors = _extract_invariant_factors(pari_mat)
         snf_mat = _build_snf_matrix(inv_factors, nrows, ncols)
@@ -151,6 +205,7 @@ class Cypari2Backend(SNFBackend):
     def compute_snf_with_transforms(
         self, matrix: list[list[int]], nrows: int, ncols: int
     ) -> tuple[list[list[int]], list[int], list[list[int]], list[list[int]]]:
+        _ensure_pari_stack(nrows, ncols, _l1_norm(matrix, nrows, ncols))
         pari_mat = self._to_pari_matrix(matrix, nrows, ncols)
 
         # matsnf(flag=1) returns [U, V, D] where U · M · V = D (PARI's D).
@@ -191,6 +246,7 @@ class Cypari2Backend(SNFBackend):
     def compute_elementary_divisors(
         self, matrix: list[list[int]], nrows: int, ncols: int
     ) -> list[int]:
+        _ensure_pari_stack(nrows, ncols, _l1_norm(matrix, nrows, ncols))
         pari = _pari()
         pari_mat = self._to_pari_matrix(matrix, nrows, ncols)
         return _extract_invariant_factors(pari_mat)

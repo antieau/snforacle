@@ -20,6 +20,7 @@ method for easy serialisation.
 
 from __future__ import annotations
 
+import shutil as _shutil
 from typing import Any
 
 from pydantic import TypeAdapter
@@ -93,6 +94,44 @@ _lazy_register_magma()
 _lazy_register_pure_python()
 
 # ---------------------------------------------------------------------------
+# Default backend detection
+# ---------------------------------------------------------------------------
+
+
+def _detect_available_backends() -> dict[str, bool]:
+    avail: dict[str, bool] = {"pure_python": True}
+    for name, lib in [("cypari2", "cypari2"), ("flint", "flint")]:
+        try:
+            __import__(lib)
+            avail[name] = True
+        except ImportError:
+            avail[name] = False
+    avail["sage"] = _shutil.which("sage") is not None
+    avail["magma"] = _shutil.which("magma") is not None
+    return avail
+
+
+_OP_PRIORITY: dict[str, list[str]] = {
+    "snf":           ["cypari2", "flint", "magma", "sage", "pure_python"],
+    "snf_transforms":["cypari2", "magma", "sage", "pure_python"],
+    "hnf":           ["flint",   "magma", "sage", "pure_python"],
+    "hnf_transform": ["magma",   "sage",  "pure_python"],
+    "ed":            ["cypari2", "flint", "magma", "sage", "pure_python"],
+}
+
+_available = _detect_available_backends()
+
+
+def _best_backend(op: str) -> str:
+    for b in _OP_PRIORITY[op]:
+        if _available.get(b):
+            return b
+    return "pure_python"
+
+
+_DEFAULTS: dict[str, str] = {op: _best_backend(op) for op in _OP_PRIORITY}
+
+# ---------------------------------------------------------------------------
 # Input normalisation
 # ---------------------------------------------------------------------------
 
@@ -131,7 +170,7 @@ def _check_dense_size(nrows: int, ncols: int) -> None:
 
 def smith_normal_form(
     matrix: Any,
-    backend: str = "cypari2",
+    backend: str | None = None,
 ) -> SNFResult:
     """Compute the Smith normal form of an integer matrix.
 
@@ -155,6 +194,8 @@ def smith_normal_form(
         ``invariant_factors``
             The sequence ``[d₁, …, dᵣ]``.
     """
+    if backend is None:
+        backend = _DEFAULTS["snf"]
     m = _parse_matrix(matrix)
     if m.nrows == 0 or m.ncols == 0:
         return SNFResult(
@@ -172,7 +213,7 @@ def smith_normal_form(
 
 def smith_normal_form_with_transforms(
     matrix: Any,
-    backend: str = "cypari2",
+    backend: str | None = None,
 ) -> SNFWithTransformsResult:
     """Compute the Smith normal form together with the unimodular transformations.
 
@@ -199,6 +240,8 @@ def smith_normal_form_with_transforms(
 
         The matrices satisfy ``U @ M @ V = smith_normal_form``.
     """
+    if backend is None:
+        backend = _DEFAULTS["snf_transforms"]
     m = _parse_matrix(matrix)
     if m.nrows == 0 or m.ncols == 0:
         def _identity(n):
@@ -224,7 +267,7 @@ def smith_normal_form_with_transforms(
 
 def hermite_normal_form(
     matrix: Any,
-    backend: str = "flint",
+    backend: str | None = None,
 ) -> HNFResult:
     """Compute the row Hermite Normal Form of an integer matrix.
 
@@ -251,6 +294,8 @@ def hermite_normal_form(
             positive pivots in non-decreasing order; entries above pivots
             satisfy 0 ≤ entry < pivot.
     """
+    if backend is None:
+        backend = _DEFAULTS["hnf"]
     m = _parse_matrix(matrix)
     if m.nrows == 0 or m.ncols == 0:
         return HNFResult(
@@ -266,7 +311,7 @@ def hermite_normal_form(
 
 def hermite_normal_form_with_transform(
     matrix: Any,
-    backend: str = "sage",
+    backend: str | None = None,
 ) -> HNFWithTransformResult:
     """Compute the row Hermite Normal Form together with the left unimodular transform.
 
@@ -290,6 +335,8 @@ def hermite_normal_form_with_transform(
 
         The matrices satisfy ``U @ M = hermite_normal_form``.
     """
+    if backend is None:
+        backend = _DEFAULTS["hnf_transform"]
     m = _parse_matrix(matrix)
     if m.nrows == 0 or m.ncols == 0:
         def _identity(n):
@@ -311,7 +358,7 @@ def hermite_normal_form_with_transform(
 
 def elementary_divisors(
     matrix: Any,
-    backend: str = "cypari2",
+    backend: str | None = None,
 ) -> ElementaryDivisorsResult:
     """Compute the non-zero invariant factors (elementary divisors) of an integer matrix.
 
@@ -334,6 +381,8 @@ def elementary_divisors(
         ``elementary_divisors``
             Non-zero invariant factors in non-decreasing order.
     """
+    if backend is None:
+        backend = _DEFAULTS["ed"]
     m = _parse_matrix(matrix)
     if m.nrows == 0 or m.ncols == 0:
         return ElementaryDivisorsResult(elementary_divisors=[])

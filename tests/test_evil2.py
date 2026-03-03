@@ -256,9 +256,9 @@ class TestTypeCoercion:
 
 class TestBackendNames:
     def test_backend_none(self):
-        """backend=None — should fail with helpful message."""
-        with pytest.raises((TypeError, ValueError)):
-            smith_normal_form(_dense([[1]]), backend=None)
+        """backend=None — uses the best available default backend."""
+        result = smith_normal_form(_dense([[1]]), backend=None)
+        assert result.invariant_factors == [1]
 
     def test_backend_with_whitespace(self):
         """backend='cypari2 ' — trailing space should fail."""

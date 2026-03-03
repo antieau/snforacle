@@ -22,9 +22,10 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 _SIZES = [10, 20, 30, 50, 75]
-_BACKENDS = ["cypari2", "flint", "sage", "magma"]
+_BACKENDS = ["cypari2", "flint", "sage", "magma", "pure_python"]
 _NO_TRANSFORMS = {"flint"}  # backends that don't support SNF/HNF transforms
 _NO_HNF = {"cypari2"}  # backends that don't support HNF (incompatible convention)
+_PURE_PYTHON_MAX_SIZE = 20  # O(n⁴) is too slow above this
 _TIMEOUT = 120  # seconds
 _REPEATS_SMALL = 3   # sizes <= 100
 _REPEATS_LARGE = 1   # sizes > 100
@@ -209,6 +210,9 @@ def _save_csv(rows: list[tuple[str, ...]], path: Path) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+_RULE = "-" * 62
+
+
 def main() -> None:
     print("snforacle benchmark suite")
     print("Checking backend availability...")
@@ -216,13 +220,16 @@ def main() -> None:
     for name, avail in available.items():
         status = "available" if avail else "unavailable (skipped)"
         print(f"  {name}: {status}")
-    print()
 
     rows: list[tuple[str, ...]] = []
 
     for size in _SIZES:
         dense_matrix = _make_dense_matrix(size)
         sparse_matrix = _make_sparse_matrix(size)
+
+        print(f"\n{_RULE}")
+        print(f"  n = {size}")
+        print(_RULE)
 
         for variant, matrix, mode, transforms in [
             ("dense", dense_matrix, "snf", False),
@@ -233,15 +240,18 @@ def main() -> None:
             ("dense+hnf+transform", dense_matrix, "hnf", True),
             ("dense+ed", dense_matrix, "ed", False),
         ]:
+            print(f"\n  {variant}")
             for backend in _BACKENDS:
                 if not available[backend]:
                     result_str = "N/A"
+                elif backend == "pure_python" and size > _PURE_PYTHON_MAX_SIZE:
+                    result_str = "N/A (too large)"
                 elif transforms and backend in _NO_TRANSFORMS:
                     result_str = "N/A"
                 elif mode == "hnf" and backend in _NO_HNF:
                     result_str = "N/A"
                 else:
-                    print(f"  {backend:8s} n={size:6d} {variant} ...", end="", flush=True)
+                    print(f"    {backend:12s} ...", end="", flush=True)
                     result_str = _run_benchmark(
                         backend, size, variant, matrix, mode=mode, transforms=transforms,
                     )
