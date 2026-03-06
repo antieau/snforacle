@@ -14,8 +14,25 @@ from snforacle.schema import (
     SNFWithTransformsResult,
     SparseIntMatrix,
 )
+from snforacle.poly_interface import (
+    poly_smith_normal_form,
+    poly_smith_normal_form_with_transforms,
+    poly_hermite_normal_form,
+    poly_hermite_normal_form_with_transform,
+    poly_elementary_divisors,
+)
+from snforacle.poly_schema import (
+    DensePolyMatrix,
+    SparsePolyMatrix,
+    PolySNFResult,
+    PolySNFWithTransformsResult,
+    PolyHNFResult,
+    PolyHNFWithTransformResult,
+    PolyElementaryDivisorsResult,
+)
 
 __all__ = [
+    # Integer matrix operations
     "smith_normal_form",
     "smith_normal_form_with_transforms",
     "hermite_normal_form",
@@ -28,4 +45,17 @@ __all__ = [
     "HNFResult",
     "HNFWithTransformResult",
     "ElementaryDivisorsResult",
+    # Polynomial matrix operations over F_p[x]
+    "poly_smith_normal_form",
+    "poly_smith_normal_form_with_transforms",
+    "poly_hermite_normal_form",
+    "poly_hermite_normal_form_with_transform",
+    "poly_elementary_divisors",
+    "DensePolyMatrix",
+    "SparsePolyMatrix",
+    "PolySNFResult",
+    "PolySNFWithTransformsResult",
+    "PolyHNFResult",
+    "PolyHNFWithTransformResult",
+    "PolyElementaryDivisorsResult",
 ]
