@@ -145,6 +145,9 @@ def _hnf_script(matrix: list[list[Poly]], nrows: int, ncols: int, p: int, transf
 class SagePolyBackend(PolyBackend):
     """Uses SageMath CLI subprocess for polynomial matrix operations over F_p[x]."""
 
+    def __init__(self) -> None:
+        _check_sage()  # fail fast if sage is not on PATH
+
     def compute_snf(
         self, matrix: list[list[Poly]], nrows: int, ncols: int, p: int
     ) -> tuple[list[list[Poly]], list[Poly]]:

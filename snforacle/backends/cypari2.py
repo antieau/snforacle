@@ -188,6 +188,9 @@ class Cypari2Backend(SNFBackend):
     in non-decreasing order.
     """
 
+    def __init__(self) -> None:
+        _pari()  # fail fast if cypari2 is not installed
+
     def _to_pari_matrix(self, matrix: list[list[int]], nrows: int, ncols: int):
         pari = _pari()
         flat = [matrix[r][c] for r in range(nrows) for c in range(ncols)]

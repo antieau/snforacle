@@ -77,9 +77,18 @@ class SparsePolyEntry(BaseModel):
 
     row: Annotated[int, Field(ge=0)]
     col: Annotated[int, Field(ge=0)]
-    coeffs: Poly  # [] = zero polynomial
+    coeffs: Poly  # must be a nonzero polynomial ([] is not allowed here)
 
     model_config = {"frozen": True}
+
+    @model_validator(mode="after")
+    def _check_nonzero(self) -> "SparsePolyEntry":
+        if not self.coeffs:
+            raise ValueError(
+                f"Sparse entry at ({self.row}, {self.col}) has the zero polynomial "
+                "[] as its value. Omit zero entries from sparse format."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------

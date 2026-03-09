@@ -26,7 +26,7 @@ validated against those schemas.
 from __future__ import annotations
 
 import shutil as _shutil
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import TypeAdapter
 
@@ -132,6 +132,9 @@ def _to_dense_poly_out(
     return DensePolyMatrixOut(nrows=nrows, ncols=ncols, p=p, entries=entries)
 
 
+_PolyBackendName = Literal["sage", "magma", "pure_python"]
+
+
 def _zero_poly_matrix(nrows: int, ncols: int) -> list[list[list[int]]]:
     return [[[] for _ in range(ncols)] for _ in range(nrows)]
 
@@ -147,7 +150,7 @@ def _identity_poly_matrix(n: int) -> list[list[list[int]]]:
 
 def poly_smith_normal_form(
     matrix: Any,
-    backend: str | None = None,
+    backend: _PolyBackendName | None = None,
 ) -> PolySNFResult:
     """Compute the Smith normal form of a polynomial matrix over F_p[x].
 
@@ -192,7 +195,7 @@ def poly_smith_normal_form(
 
 def poly_smith_normal_form_with_transforms(
     matrix: Any,
-    backend: str | None = None,
+    backend: _PolyBackendName | None = None,
 ) -> PolySNFWithTransformsResult:
     """Compute the SNF together with invertible left and right transforms.
 
@@ -249,7 +252,7 @@ def poly_smith_normal_form_with_transforms(
 
 def poly_hermite_normal_form(
     matrix: Any,
-    backend: str | None = None,
+    backend: _PolyBackendName | None = None,
 ) -> PolyHNFResult:
     """Compute the row Hermite Normal Form of a polynomial matrix over F_p[x].
 
@@ -287,7 +290,7 @@ def poly_hermite_normal_form(
 
 def poly_hermite_normal_form_with_transform(
     matrix: Any,
-    backend: str | None = None,
+    backend: _PolyBackendName | None = None,
 ) -> PolyHNFWithTransformResult:
     """Compute the row HNF together with the left invertible transform.
 
@@ -334,7 +337,7 @@ def poly_hermite_normal_form_with_transform(
 
 def poly_elementary_divisors(
     matrix: Any,
-    backend: str | None = None,
+    backend: _PolyBackendName | None = None,
 ) -> PolyElementaryDivisorsResult:
     """Compute the non-zero invariant factors (elementary divisors) over F_p[x].
 

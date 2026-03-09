@@ -36,6 +36,15 @@ class SparseEntry(BaseModel):
 
     model_config = {"frozen": True}
 
+    @model_validator(mode="after")
+    def _check_nonzero(self) -> "SparseEntry":
+        if self.value == 0:
+            raise ValueError(
+                f"Sparse entry at ({self.row}, {self.col}) has value 0. "
+                "Omit zero entries from sparse format."
+            )
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Input schemas

@@ -27,6 +27,9 @@ class FlintBackend(SNFBackend):
     ``compute_snf_with_transforms`` raises ``NotImplementedError``.
     """
 
+    def __init__(self) -> None:
+        _flint()  # fail fast if python-flint is not installed
+
     def compute_snf(
         self, matrix: list[list[int]], nrows: int, ncols: int
     ) -> tuple[list[list[int]], list[int]]:

@@ -1,6 +1,14 @@
 src/creation_of_classes.ipynb
 src/timing.py
 
+# Generated benchmark output and demo recordings
+benchmarks/results.csv
+benchmarks/large_results.csv
+demo.cast
+
+# Local virtual environment
+.venv/
+
 # Coverage
 .coverage
 

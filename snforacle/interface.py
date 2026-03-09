@@ -21,7 +21,7 @@ method for easy serialisation.
 from __future__ import annotations
 
 import shutil as _shutil
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import TypeAdapter
 
@@ -150,7 +150,13 @@ def _to_dense_model(
     return DenseIntMatrix(format="dense", nrows=nrows, ncols=ncols, entries=entries)
 
 
+_IntBackend = Literal["cypari2", "flint", "sage", "magma", "pure_python"]
+
 _MAX_DENSE_ELEMENTS = 10_000_000  # ~280 MB of Python ints
+
+
+def _identity(n: int) -> list[list[int]]:
+    return [[1 if i == j else 0 for j in range(n)] for i in range(n)]
 
 
 def _check_dense_size(nrows: int, ncols: int) -> None:
@@ -170,7 +176,7 @@ def _check_dense_size(nrows: int, ncols: int) -> None:
 
 def smith_normal_form(
     matrix: Any,
-    backend: str | None = None,
+    backend: _IntBackend | None = None,
 ) -> SNFResult:
     """Compute the Smith normal form of an integer matrix.
 
@@ -180,7 +186,8 @@ def smith_normal_form(
         The input matrix as a ``DenseIntMatrix``, ``SparseIntMatrix``, or a
         plain ``dict`` conforming to one of those schemas.
     backend:
-        Name of the backend to use.  Currently ``"cypari2"`` is supported.
+        Name of the backend to use: ``"cypari2"``, ``"flint"``, ``"sage"``,
+        ``"magma"``, or ``"pure_python"``.  Defaults to the best available.
 
     Returns
     -------
@@ -213,7 +220,7 @@ def smith_normal_form(
 
 def smith_normal_form_with_transforms(
     matrix: Any,
-    backend: str | None = None,
+    backend: _IntBackend | None = None,
 ) -> SNFWithTransformsResult:
     """Compute the Smith normal form together with the unimodular transformations.
 
@@ -244,8 +251,6 @@ def smith_normal_form_with_transforms(
         backend = _DEFAULTS["snf_transforms"]
     m = _parse_matrix(matrix)
     if m.nrows == 0 or m.ncols == 0:
-        def _identity(n):
-            return [[1 if i == j else 0 for j in range(n)] for i in range(n)]
         return SNFWithTransformsResult(
             smith_normal_form=_to_dense_model(m.to_dense(), m.nrows, m.ncols),
             invariant_factors=[],
@@ -267,7 +272,7 @@ def smith_normal_form_with_transforms(
 
 def hermite_normal_form(
     matrix: Any,
-    backend: str | None = None,
+    backend: _IntBackend | None = None,
 ) -> HNFResult:
     """Compute the row Hermite Normal Form of an integer matrix.
 
@@ -311,7 +316,7 @@ def hermite_normal_form(
 
 def hermite_normal_form_with_transform(
     matrix: Any,
-    backend: str | None = None,
+    backend: _IntBackend | None = None,
 ) -> HNFWithTransformResult:
     """Compute the row Hermite Normal Form together with the left unimodular transform.
 
@@ -339,8 +344,6 @@ def hermite_normal_form_with_transform(
         backend = _DEFAULTS["hnf_transform"]
     m = _parse_matrix(matrix)
     if m.nrows == 0 or m.ncols == 0:
-        def _identity(n):
-            return [[1 if i == j else 0 for j in range(n)] for i in range(n)]
         return HNFWithTransformResult(
             hermite_normal_form=_to_dense_model(m.to_dense(), m.nrows, m.ncols),
             left_transform=_to_dense_model(_identity(m.nrows), m.nrows, m.nrows),
@@ -358,7 +361,7 @@ def hermite_normal_form_with_transform(
 
 def elementary_divisors(
     matrix: Any,
-    backend: str | None = None,
+    backend: _IntBackend | None = None,
 ) -> ElementaryDivisorsResult:
     """Compute the non-zero invariant factors (elementary divisors) of an integer matrix.
 

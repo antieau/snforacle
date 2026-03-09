@@ -5,15 +5,37 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "snforacle"
 version = "0.1.0"
-description = "Smith normal form via a uniform JSON interface across multiple backends."
+description = "Smith normal form, Hermite normal form, and elementary divisors for integer and polynomial matrices via a uniform Python API with pluggable backends."
+readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = ["pydantic>=2.0"]
+keywords = ["smith normal form", "hermite normal form", "elementary divisors", "invariant factors", "integer matrices", "polynomial matrices", "linear algebra"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/snforacle/snforacle"
+Repository = "https://github.com/snforacle/snforacle"
+Issues = "https://github.com/snforacle/snforacle/issues"
 
 [project.optional-dependencies]
 cypari2 = ["cypari2>=2.2"]
 flint = ["python-flint>=0.8.0"]
-dev = ["pytest", "numpy"]
+dev = ["pytest", "pytest-cov", "numpy"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["snforacle*"]
+
+[tool.setuptools.package-data]
+snforacle = ["py.typed"]

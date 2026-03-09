@@ -20,7 +20,10 @@ The **elementary divisors** are the non-zero diagonal entries of the SNF, return
 
 All backends accept the same input and return the same output types. Backends that are unavailable raise a clear error when first used.
 
-**Note:** The `cypari2` backend does not support row HNF because PARI's native `mathnf()` computes the column HNF (H = M·U) which uses an incompatible convention. For HNF, use the `flint`, `sage`, or `magma` backend (default: `flint`).
+**Notes:**
+- The `cypari2` backend does not support row HNF because PARI's native `mathnf()` computes the column HNF (H = M·U) which uses an incompatible convention. For HNF, use the `flint`, `sage`, or `magma` backend (default: `flint`).
+- The `flint` backend does not support SNF or HNF with transforms (python-flint 0.8.0 limitation). Use `sage`, `magma`, or `pure_python` for transforms.
+- The `pure_python` backend is an educational reference with O(n⁴) complexity and exponential intermediate-value growth. It is suitable for matrices up to roughly 12×12; use a faster backend for anything larger.
 
 ## Installation
 
@@ -144,6 +147,53 @@ Both functions accept a `DenseIntMatrix` or `SparseIntMatrix` (as a Pydantic mod
 
 All output models have `.model_dump()` and `.model_dump_json()` for serialisation.
 
+## Polynomial matrices over F_p[x]
+
+snforacle also handles matrices whose entries are polynomials over a finite field F_p (p prime). All five operations are supported.
+
+```python
+from snforacle import (
+    poly_smith_normal_form,
+    poly_smith_normal_form_with_transforms,
+    poly_hermite_normal_form,
+    poly_hermite_normal_form_with_transform,
+    poly_elementary_divisors,
+)
+
+# Polynomials are coefficient lists [c_0, c_1, ..., c_d] (constant term first),
+# with coefficients in [0, p-1]. The zero polynomial is [].
+# Here: [[x, 1], [0, x+1]] over F_2[x]
+M = {
+    "format": "dense_poly",
+    "nrows": 2,
+    "ncols": 2,
+    "p": 2,
+    "entries": [[[0, 1], [1]], [[], [1, 1]]],
+}
+
+result = poly_smith_normal_form(M)
+print(result.invariant_factors)   # monic polynomials, e.g. [[1], [0, 0, 1]]
+
+result = poly_smith_normal_form_with_transforms(M)
+# result.left_transform @ M @ result.right_transform == result.smith_normal_form
+
+result = poly_hermite_normal_form(M)
+result = poly_elementary_divisors(M)
+```
+
+**Polynomial backend availability:**
+
+| Backend | Requires | SNF | SNF+T | HNF | HNF+T | Elem. Div. |
+|---------|----------|-----|-------|-----|-------|-----------|
+| `sage` *(default)* | SageMath on PATH | yes | yes | yes | yes | yes |
+| `magma` | MAGMA on PATH | yes | yes | yes | yes | yes |
+| `pure_python` | none (stdlib only) | yes | yes | yes | yes | yes |
+
+**Notes:**
+- Invariant factors and HNF pivots are always returned as monic polynomials.
+- `pure_python` is a reference implementation suitable for small matrices only (n ≲ 10).
+- There is no `flint` polynomial backend; python-flint 0.8.0 does not expose `nmod_poly_mat`.
+
 ## Benchmarks
 
 ```bash
@@ -161,4 +211,6 @@ pytest tests/           # sage/magma tests auto-skip if not on PATH
 pytest --cov=snforacle tests/
 ```
 
-To add a new backend, subclass `SNFBackend` in `snforacle/backends/`, implement `compute_snf` and `compute_snf_with_transforms`, then register it in `snforacle/interface.py`.
+**Adding an integer matrix backend:** subclass `SNFBackend` in `snforacle/backends/` and implement all five abstract methods: `compute_snf`, `compute_snf_with_transforms`, `compute_hnf`, `compute_hnf_with_transform`, and `compute_elementary_divisors`. Register the class in `snforacle/interface.py`. Raise `NotImplementedError` for any operations the backend cannot support.
+
+**Adding a polynomial matrix backend:** subclass `PolyBackend` in `snforacle/backends/` (same five methods, each taking an additional `p: int` argument) and register it in `snforacle/poly_interface.py`.
