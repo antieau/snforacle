@@ -9,7 +9,6 @@ from pathlib import Path
 
 from snforacle.backends.base import SNFBackend
 
-_TIMEOUT = 120  # seconds
 
 # MAGMA script template — matrix entries are embedded directly as a sequence
 # literal (MAGMA has no JSON parser).
@@ -55,7 +54,11 @@ printf "\\n";
 quit;
 """
 
-_SIZE_GUARD = 10_000_000  # max elements to embed inline in the script
+# Maximum number of matrix elements (nrows * ncols) that may be embedded
+# inline as a MAGMA integer sequence literal.  Beyond this the script would
+# exceed practical string/process-argument size limits (~40 MB of text for
+# entries in [-100, 100]).
+_SIZE_GUARD = 10_000_000
 
 
 def _require_magma() -> str:
@@ -124,7 +127,7 @@ def _parse_magma_output(stdout: str, nrows: int, ncols: int) -> dict:
     incomplete_token = ""  # Store the incomplete number part
 
     all_lines = stdout.splitlines()
-    for line_idx, line in enumerate(all_lines):
+    for line in all_lines:
         line = line.strip()
         if not line:
             continue
@@ -418,32 +421,26 @@ class MagmaBackend(SNFBackend):
         script_text = _build_magma_script(flat, nrows, ncols, template=template)
         with tempfile.TemporaryDirectory() as tmpdir:
             script_path = str(Path(tmpdir) / "snf_script.m")
-            try:
-                with open(script_path, "w") as f:
-                    f.write(script_text)
-                result = subprocess.run(
-                    [self._magma_bin, "-b", script_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=_TIMEOUT,
+            with open(script_path, "w") as f:
+                f.write(script_text)
+            result = subprocess.run(
+                [self._magma_bin, "-b", script_path],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"MAGMA subprocess failed (exit {result.returncode}).\n"
+                    f"stderr: {result.stderr}"
                 )
-                if result.returncode != 0:
-                    raise RuntimeError(
-                        f"MAGMA subprocess failed (exit {result.returncode}).\n"
-                        f"stderr: {result.stderr}"
-                    )
-                if template == _MAGMA_SCRIPT_TEMPLATE:
-                    return _parse_magma_output(result.stdout, nrows, ncols)
-                elif template == _MAGMA_HNF_TEMPLATE:
-                    return _parse_magma_hnf_output(result.stdout, nrows, ncols)
-                elif template == _MAGMA_ED_TEMPLATE:
-                    return _parse_magma_ed_output(result.stdout)
-                else:
-                    raise ValueError(f"Unknown MAGMA template: {template}")
-            except subprocess.TimeoutExpired as exc:
-                raise TimeoutError(
-                    f"MAGMA did not complete within {_TIMEOUT}s."
-                ) from exc
+            if template == _MAGMA_SCRIPT_TEMPLATE:
+                return _parse_magma_output(result.stdout, nrows, ncols)
+            elif template == _MAGMA_HNF_TEMPLATE:
+                return _parse_magma_hnf_output(result.stdout, nrows, ncols)
+            elif template == _MAGMA_ED_TEMPLATE:
+                return _parse_magma_ed_output(result.stdout)
+            else:
+                raise ValueError(f"Unknown MAGMA template: {template}")
 
     def compute_snf(
         self, matrix: list[list[int]], nrows: int, ncols: int

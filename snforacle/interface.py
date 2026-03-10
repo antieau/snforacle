@@ -152,7 +152,10 @@ def _to_dense_model(
 
 _IntBackend = Literal["cypari2", "flint", "sage", "magma", "pure_python"]
 
-_MAX_DENSE_ELEMENTS = 10_000_000  # ~280 MB of Python ints
+# Reject dense expansion beyond this many elements (~280 MB assuming ~28 bytes
+# per Python int object).  Sparse matrices larger than this can still be used;
+# they are converted to dense internally only when needed.
+_MAX_DENSE_ELEMENTS = 10_000_000
 
 
 def _identity(n: int) -> list[list[int]]:

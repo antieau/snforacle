@@ -7,9 +7,11 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+from pathlib import Path
 
 from snforacle.backends.poly_base import PolyBackend
 from snforacle.poly_schema import Poly
+
 
 
 def _check_sage() -> None:
@@ -49,14 +51,12 @@ def _run_sage(script: str) -> str:
     """Run a Sage script and return stdout."""
     _check_sage()
     with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = tmpdir + "/script.sage"
-        with open(script_path, "w") as f:
-            f.write(script)
+        script_path = Path(tmpdir) / "script.sage"
+        script_path.write_text(script)
         result = subprocess.run(
-            ["sage", script_path],
+            ["sage", str(script_path)],
             capture_output=True,
             text=True,
-            timeout=120,
         )
     if result.returncode != 0:
         raise RuntimeError(

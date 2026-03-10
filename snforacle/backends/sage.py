@@ -10,7 +10,6 @@ from pathlib import Path
 
 from snforacle.backends.base import SNFBackend
 
-_TIMEOUT = 120  # seconds
 
 # Sage script template — written to a .sage file so Sage's preprocessor runs,
 # making matrix(ZZ, ...) available without explicit imports.
@@ -115,27 +114,21 @@ class SageBackend(SNFBackend):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = str(Path(tmpdir) / "input.json")
             script_path = str(Path(tmpdir) / "snf_script.sage")
-            try:
-                _write_input(flat, nrows, ncols, input_path)
-                script_text = _build_sage_script(input_path, template=template)
-                with open(script_path, "w") as f:
-                    f.write(script_text)
-                result = subprocess.run(
-                    [self._sage_bin, script_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=_TIMEOUT,
+            _write_input(flat, nrows, ncols, input_path)
+            script_text = _build_sage_script(input_path, template=template)
+            with open(script_path, "w") as f:
+                f.write(script_text)
+            result = subprocess.run(
+                [self._sage_bin, script_path],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Sage subprocess failed (exit {result.returncode}).\n"
+                    f"stderr: {result.stderr}"
                 )
-                if result.returncode != 0:
-                    raise RuntimeError(
-                        f"Sage subprocess failed (exit {result.returncode}).\n"
-                        f"stderr: {result.stderr}"
-                    )
-                return _parse_sage_output(result.stdout, nrows, ncols)
-            except subprocess.TimeoutExpired as exc:
-                raise TimeoutError(
-                    f"Sage did not complete within {_TIMEOUT}s."
-                ) from exc
+            return _parse_sage_output(result.stdout, nrows, ncols)
 
     def compute_snf(
         self, matrix: list[list[int]], nrows: int, ncols: int

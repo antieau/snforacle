@@ -6,9 +6,11 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+from pathlib import Path
 
 from snforacle.backends.poly_base import PolyBackend
 from snforacle.poly_schema import Poly
+
 
 
 def _check_magma() -> None:
@@ -94,14 +96,12 @@ def _parse_magma_matrix(lines: list[str], nrows: int, ncols: int) -> list[list[P
 def _run_magma(script: str) -> str:
     _check_magma()
     with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = tmpdir + "/script.magma"
-        with open(script_path, "w") as f:
-            f.write(script)
+        script_path = Path(tmpdir) / "script.magma"
+        script_path.write_text(script)
         result = subprocess.run(
-            ["magma", "-n", script_path],
+            ["magma", "-n", str(script_path)],
             capture_output=True,
             text=True,
-            timeout=120,
         )
     if result.returncode != 0:
         raise RuntimeError(
@@ -188,7 +188,7 @@ def _parse_magma_output_blocks(stdout: str, shapes: dict[str, tuple[int, int]]) 
         if stripped in shapes:
             current = stripped
             blocks[current] = []
-        elif current is not None and stripped:
+        elif current is not None and stripped and stripped[0].isdigit():
             blocks[current].append(stripped)
     result = {}
     for label, (nr, nc) in shapes.items():

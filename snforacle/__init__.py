@@ -30,6 +30,22 @@ from snforacle.poly_schema import (
     PolyHNFWithTransformResult,
     PolyElementaryDivisorsResult,
 )
+from snforacle.ff_interface import (
+    ff_smith_normal_form,
+    ff_smith_normal_form_with_transforms,
+    ff_hermite_normal_form,
+    ff_hermite_normal_form_with_transform,
+    ff_rank,
+)
+from snforacle.ff_schema import (
+    DenseFFMatrix,
+    SparseFFMatrix,
+    FFSNFResult,
+    FFSNFWithTransformsResult,
+    FFHNFResult,
+    FFHNFWithTransformResult,
+    FFRankResult,
+)
 
 __all__ = [
     # Integer matrix operations
@@ -58,4 +74,17 @@ __all__ = [
     "PolyHNFResult",
     "PolyHNFWithTransformResult",
     "PolyElementaryDivisorsResult",
+    # Finite field matrix operations over F_p
+    "ff_smith_normal_form",
+    "ff_smith_normal_form_with_transforms",
+    "ff_hermite_normal_form",
+    "ff_hermite_normal_form_with_transform",
+    "ff_rank",
+    "DenseFFMatrix",
+    "SparseFFMatrix",
+    "FFSNFResult",
+    "FFSNFWithTransformsResult",
+    "FFHNFResult",
+    "FFHNFWithTransformResult",
+    "FFRankResult",
 ]

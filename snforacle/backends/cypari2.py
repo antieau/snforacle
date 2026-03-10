@@ -17,7 +17,7 @@ def _load_cache_table() -> list[dict]:
         try:
             data = json.loads(_CACHE_TABLE_PATH.read_text())
             _cache_table = data["entries"]
-        except Exception:
+        except (OSError, json.JSONDecodeError, KeyError):
             _cache_table = []
     return _cache_table
 
@@ -56,7 +56,9 @@ def _pari():
         ) from exc
     if not hasattr(_pari, "_instance"):
         _pari._instance = cypari2.Pari()
-        # Start with a modest allocation; _ensure_pari_stack grows it per-call.
+        # Start with 128 MB — large enough for most small-to-medium matrices
+        # while staying well under typical ulimit caps.  _ensure_pari_stack
+        # will grow the allocation on a per-call basis as needed.
         _pari._instance.allocatemem(128 * 1024 * 1024, silent=True)
     return _pari._instance
 

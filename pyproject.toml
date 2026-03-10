@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "snforacle"
 version = "0.1.0"
-description = "Smith normal form, Hermite normal form, and elementary divisors for integer and polynomial matrices via a uniform Python API with pluggable backends."
+description = "Smith normal form, Hermite normal form, and elementary divisors for integer, polynomial, and finite-field matrices via a uniform Python API with pluggable backends."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = ["pydantic>=2.0"]
-keywords = ["smith normal form", "hermite normal form", "elementary divisors", "invariant factors", "integer matrices", "polynomial matrices", "linear algebra"]
+keywords = ["smith normal form", "hermite normal form", "elementary divisors", "invariant factors", "integer matrices", "polynomial matrices", "finite field", "linear algebra"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -24,18 +24,20 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/snforacle/snforacle"
-Repository = "https://github.com/snforacle/snforacle"
-Issues = "https://github.com/snforacle/snforacle/issues"
+Homepage = "https://antieau.github.io/snforacle"
+Repository = "https://github.com/antieau/snforacle"
+Issues = "https://github.com/antieau/snforacle/issues"
+Documentation = "https://antieau.github.io/snforacle"
 
 [project.optional-dependencies]
 cypari2 = ["cypari2>=2.2"]
 flint = ["python-flint>=0.8.0"]
 dev = ["pytest", "pytest-cov", "numpy"]
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5,<10", "mkdocstrings[python]>=0.25", "ruff"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["snforacle*"]
 
 [tool.setuptools.package-data]
-snforacle = ["py.typed"]
+snforacle = ["py.typed", "backends/pari_cache_table.json"]

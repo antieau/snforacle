@@ -13,6 +13,7 @@ import random
 import shutil
 import signal
 import statistics
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,13 @@ _TIMEOUT = 120  # seconds
 _REPEATS_SMALL = 3   # sizes <= 100
 _REPEATS_LARGE = 1   # sizes > 100
 _THRESHOLD_REPEATS = 100
+
+# FF (F_p) benchmark configuration
+_FF_SIZES = [50, 100, 200, 500, 1000]
+_FF_BACKENDS = ["flint", "sage", "magma", "pure_python"]
+_FF_NO_TRANSFORMS = {"flint"}  # delegates to pure_python, so equivalent
+_FF_PURE_PYTHON_MAX_SIZE = 100  # O(n³) but Python-speed
+_FF_P = 65537  # a large prime typical for applications
 
 # ---------------------------------------------------------------------------
 # Matrix generation
@@ -83,6 +91,18 @@ def _check_available(backend_name: str) -> bool:
         return False
 
 
+def _check_ff_available(backend_name: str) -> bool:
+    """Return True if the named FF backend can be instantiated / is on PATH."""
+    cli_backends = {"sage", "magma"}
+    if backend_name in cli_backends:
+        return shutil.which(backend_name) is not None
+    try:
+        from snforacle.ff_interface import _BACKENDS as FF_BACKENDS  # noqa: PLC0415
+        return backend_name in FF_BACKENDS
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Timing helpers
 # ---------------------------------------------------------------------------
@@ -93,6 +113,78 @@ class _TimeoutError(Exception):
 
 def _alarm_handler(signum, frame):
     raise _TimeoutError()
+
+
+def _make_ff_matrix(n: int, p: int, seed: int = 42) -> list[list[int]]:
+    """Return an n×n dense matrix with entries uniform in [0, p-1]."""
+    try:
+        import numpy as np
+        rng = np.random.default_rng(seed)
+        return rng.integers(0, p, size=(n, n)).tolist()
+    except ImportError:
+        rng = random.Random(seed)
+        return [[rng.randint(0, p - 1) for _ in range(n)] for _ in range(n)]
+
+
+def _time_ff_backend(
+    name: str, matrix: list[list[int]], n: int, p: int, timeout: int,
+    *, mode: str = "snf", transforms: bool = False,
+) -> float | str:
+    """Time a single FF computation; return elapsed seconds or 'timeout'/'error'."""
+    from snforacle import (  # noqa: PLC0415
+        ff_hermite_normal_form,
+        ff_hermite_normal_form_with_transform,
+        ff_rank,
+        ff_smith_normal_form,
+        ff_smith_normal_form_with_transforms,
+    )
+
+    inp = {"format": "dense_ff", "nrows": n, "ncols": n, "p": p, "entries": matrix}
+
+    if mode == "snf":
+        fn = ff_smith_normal_form_with_transforms if transforms else ff_smith_normal_form
+    elif mode == "hnf":
+        fn = ff_hermite_normal_form_with_transform if transforms else ff_hermite_normal_form
+    elif mode == "rank":
+        fn = ff_rank
+    else:
+        raise ValueError(f"Unknown FF mode: {mode}")
+
+    use_signal = hasattr(signal, "SIGALRM")
+
+    try:
+        if use_signal:
+            signal.signal(signal.SIGALRM, _alarm_handler)
+            signal.alarm(timeout)
+        start = time.perf_counter()
+        fn(inp, backend=name)
+        elapsed = time.perf_counter() - start
+        return elapsed
+    except (_TimeoutError, TimeoutError, subprocess.TimeoutExpired):
+        return "timeout"
+    except Exception as exc:
+        return f"error: {exc}"
+    finally:
+        if use_signal:
+            signal.alarm(0)
+
+
+def _run_ff_benchmark(
+    name: str, size: int, variant: str, matrix: list[list[int]], p: int,
+    *, mode: str = "snf", transforms: bool = False,
+) -> str:
+    """Run timed FF benchmark(s) for one (backend, size, variant) combination."""
+    repeats = _REPEATS_SMALL if size <= _THRESHOLD_REPEATS else _REPEATS_LARGE
+    times: list[float] = []
+
+    for _ in range(repeats):
+        result = _time_ff_backend(name, matrix, size, p, _TIMEOUT, mode=mode, transforms=transforms)
+        if isinstance(result, str):
+            return result
+        times.append(result)
+
+    median = statistics.median(times)
+    return f"{median:.4f}"
 
 
 def _time_backend(
@@ -134,8 +226,7 @@ def _time_backend(
 
     # Use signal.alarm on Unix for Python backends; CLI backends handle their
     # own timeout via subprocess.TimeoutExpired.
-    cli_backends = {"sage", "magma"}
-    use_signal = (name not in cli_backends) and hasattr(signal, "SIGALRM")
+    use_signal = hasattr(signal, "SIGALRM")
 
     try:
         if use_signal:
@@ -145,9 +236,7 @@ def _time_backend(
         fn(inp, backend=name)
         elapsed = time.perf_counter() - start
         return elapsed
-    except _TimeoutError:
-        return "timeout"
-    except TimeoutError:
+    except (_TimeoutError, TimeoutError, subprocess.TimeoutExpired):
         return "timeout"
     except Exception as exc:
         return f"error: {exc}"
@@ -215,6 +304,12 @@ _RULE = "-" * 62
 
 def main() -> None:
     print("snforacle benchmark suite")
+    print()
+
+    # ------------------------------------------------------------------
+    # Integer matrix benchmarks
+    # ------------------------------------------------------------------
+    print("=== Integer matrices ===")
     print("Checking backend availability...")
     available: dict[str, bool] = {b: _check_available(b) for b in _BACKENDS}
     for name, avail in available.items():
@@ -264,6 +359,69 @@ def main() -> None:
     csv_path = Path(__file__).parent / "results.csv"
     _save_csv(rows, csv_path)
     print(f"\nResults saved to {csv_path}")
+
+    # ------------------------------------------------------------------
+    # Finite field (F_p) matrix benchmarks
+    # ------------------------------------------------------------------
+    print()
+    print("=== Finite field matrices (F_p) ===")
+    print(f"p = {_FF_P}")
+    print("Checking FF backend availability...")
+    ff_available: dict[str, bool] = {b: _check_ff_available(b) for b in _FF_BACKENDS}
+    for name, avail in ff_available.items():
+        status = "available" if avail else "unavailable (skipped)"
+        print(f"  {name}: {status}")
+
+    ff_rows: list[tuple[str, ...]] = []
+
+    for size in _FF_SIZES:
+        ff_matrix = _make_ff_matrix(size, _FF_P)
+
+        print(f"\n{_RULE}")
+        print(f"  n = {size}")
+        print(_RULE)
+
+        for variant, mode, transforms in [
+            ("snf", "snf", False),
+            ("snf+transform", "snf", True),
+            ("hnf", "hnf", False),
+            ("hnf+transform", "hnf", True),
+            ("rank", "rank", False),
+        ]:
+            print(f"\n  {variant}")
+            for backend in _FF_BACKENDS:
+                if not ff_available[backend]:
+                    result_str = "N/A"
+                elif backend == "pure_python" and size > _FF_PURE_PYTHON_MAX_SIZE:
+                    result_str = "N/A (too large)"
+                elif transforms and backend in _FF_NO_TRANSFORMS:
+                    # flint delegates to pure_python for transforms — skip at large sizes
+                    if size > _FF_PURE_PYTHON_MAX_SIZE:
+                        result_str = "N/A (too large)"
+                    else:
+                        print(f"    {backend:12s} ...", end="", flush=True)
+                        result_str = _run_ff_benchmark(
+                            backend, size, variant, ff_matrix, _FF_P,
+                            mode=mode, transforms=transforms,
+                        )
+                        print(f" {result_str}")
+                    ff_rows.append((backend, str(size), variant, result_str))
+                    continue
+                else:
+                    print(f"    {backend:12s} ...", end="", flush=True)
+                    result_str = _run_ff_benchmark(
+                        backend, size, variant, ff_matrix, _FF_P,
+                        mode=mode, transforms=transforms,
+                    )
+                    print(f" {result_str}")
+                ff_rows.append((backend, str(size), variant, result_str))
+
+    print()
+    _print_table(ff_rows)
+
+    ff_csv_path = Path(__file__).parent / "ff_results.csv"
+    _save_csv(ff_rows, ff_csv_path)
+    print(f"\nFF results saved to {ff_csv_path}")
 
 
 if __name__ == "__main__":
