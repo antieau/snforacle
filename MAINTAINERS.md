@@ -111,8 +111,7 @@ from simplicial complexes). Currently the CLI backend always builds a dense
 `Matrix(Integers(), [...])`, discarding any sparsity information that the caller
 provided.
 
-To implement: detect when the input `SparseIntegerMatrix` has density below some
-threshold, emit `SparseMatrix(Integers(), nrows, ncols, [...])` in the MAGMA
+To implement: emit `SparseMatrix(Integers(), nrows, ncols, [...])` in the MAGMA
 script instead of `Matrix`, and add a conversion step if MAGMA returns a dense
 result. The same idea applies to the `SparseFFMatrix` (F_p) and
 `SparsePolyMatrix` (F_p[x]) input formats with MAGMA's corresponding sparse
