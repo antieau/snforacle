@@ -33,7 +33,7 @@ Documentation = "https://antieau.github.io/snforacle"
 cypari2 = ["cypari2>=2.2"]
 flint = ["python-flint>=0.8.0"]
 dev = ["pytest", "pytest-cov", "numpy"]
-docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5,<10", "mkdocstrings[python]>=0.25", "ruff"]
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5,<10", "mkdocstrings[python]>=0.25", "mkdocs-gen-files>=0.5", "ruff"]
 
 [tool.setuptools.packages.find]
 where = ["."]

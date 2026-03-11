@@ -30,6 +30,9 @@ theme:
 
 plugins:
   - search
+  - gen-files:
+      scripts:
+        - docs/gen_schemas.py
   - mkdocstrings:
       handlers:
         python:
@@ -67,5 +70,6 @@ nav:
     - Integer Matrices: api/integer.md
     - Finite-Field Matrices: api/finite-field.md
     - Polynomial Matrices: api/polynomial.md
+  - JSON Schemas: schemas.md
   - Contributing: contributing.md
   - Changelog: changelog.md
