@@ -9,6 +9,7 @@ import pytest
 
 flint = pytest.importorskip("flint", reason="python-flint not installed")
 
+from _mathelpers import assert_invertible_ff
 from snforacle.backends.flint_ff import FlintFFBackend
 from snforacle.backends.pure_python_ff import mat_mul_ff
 
@@ -97,6 +98,8 @@ class TestFlintSNFWithTransforms:
         assert _is_snf(snf, nrows, ncols, rank)
         UMV = mat_mul_ff(mat_mul_ff(U, M, p), V, p)
         assert UMV == snf
+        assert_invertible_ff(U, p, "U")
+        assert_invertible_ff(V, p, "V")
 
     def test_identity_p5(self):
         self._verify(_identity(2), 2, 2, 5)
@@ -140,6 +143,7 @@ class TestFlintHNFWithTransform:
         H, U = BACKEND.compute_hnf_with_transform(M, nrows, ncols, p)
         assert _is_rref(H, nrows, ncols, p)
         assert mat_mul_ff(U, M, p) == H
+        assert_invertible_ff(U, p, "U")
 
     def test_identity_p5(self):
         self._verify(_identity(3), 3, 3, 5)

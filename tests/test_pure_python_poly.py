@@ -13,6 +13,7 @@ from snforacle import (
 )
 from snforacle.backends.pure_python_poly import poly_mat_mul
 from snforacle.poly_schema import PolyHNFResult, PolySNFResult
+from _mathelpers import assert_invertible_poly
 
 BACKEND = "pure_python"
 
@@ -196,6 +197,8 @@ class TestPurePythonPolySNFWithTransforms:
         UM = poly_mat_mul(U, m_entries, p)
         UMV = poly_mat_mul(UM, V, p)
         assert _mat_eq(UMV, snf), f"U @ M @ V != SNF\nUMV={UMV}\nSNF={snf}"
+        assert_invertible_poly(U, p, "U")
+        assert_invertible_poly(V, p, "V")
 
     def test_identity_2x2_f2(self):
         self._verify(_dense(_I2, 2), 2)
@@ -283,6 +286,7 @@ class TestPurePythonPolyHNFWithTransform:
         m_entries = matrix_dict["entries"]
         UM = poly_mat_mul(U, m_entries, p)
         assert _mat_eq(UM, hnf), f"U @ M != HNF\nUM={UM}\nHNF={hnf}"
+        assert_invertible_poly(U, p, "U")
 
     def test_identity_2x2_f2(self):
         self._verify(_dense(_I2, 2), 2)

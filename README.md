@@ -10,6 +10,23 @@ The **Hermite Normal Form** (row HNF) is the unique upper-triangular matrix H wi
 
 The **elementary divisors** are the non-zero diagonal entries of the SNF, returned in non-decreasing order. They can be computed via a potentially faster dedicated path.
 
+This package is probably suitable for your needs if you are in a situation where the cost to run
+SNF is significantly larger than translational costs. If you have a high-throughput situation where
+you need to run SNF on lots of small matrices, another solution might be preferred.
+
+## AI Disclaimer
+
+This package was designed by Ben Antieau and authored almost entirely by Claude Code. It is part of
+the codebase being developed by Ben Antieau and Achim Krause for their various projects. The human in
+the picture has caused CC to create extensive testing which compares the outputs across different
+computer algebra systems. He is confident that this software is at least as bug-free as is standard
+for mathematical software, and he thinks it is likely much more bug-free.
+
+Testing included 1000s of random matrices across the available backends. In one case, we discovered
+a bug in FLINT, which has now been fixed; see [flint#2592](https://github.com/flintlib/flint/issues/2592).
+Ben will write more about the process of creating this package elsewhere.
+
+
 ## Backends
 
 | Backend | Requires | SNF | SNF+T | HNF | HNF+T | Elem. Div. |
@@ -24,8 +41,12 @@ All backends accept the same input and return the same output types. Backends th
 
 **Notes:**
 - The `cypari2` backend does not support row HNF because PARI's native `mathnf()` computes the column HNF (H = M·U) which uses an incompatible convention. For HNF, use the `flint`, `sage`, or `magma` backend (default: `flint`).
-- The `flint` backend does not support SNF or HNF with transforms (python-flint 0.8.0 limitation). Use `sage`, `magma`, or `pure_python` for transforms.
+- The `flint` backend does not (presently) support SNF or HNF with transforms (python-flint 0.8.0 limitation). Use `sage`, `magma`, or `pure_python` for transforms.
 - The `pure_python` backend is an educational reference with O(n⁴) complexity and exponential intermediate-value growth. It is suitable for matrices up to roughly 12×12; use a faster backend for anything larger.
+
+## Documentation
+
+See the [documenation](https://antieau.github.io/snforacle/).
 
 ## Installation
 
@@ -43,6 +64,7 @@ pip install "snforacle[cypari2,flint]"
 # install SageMath or MAGMA separately and make sure
 # 'sage' / 'magma' is on your PATH.
 ```
+
 
 ## Quick start
 

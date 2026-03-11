@@ -19,6 +19,7 @@ from snforacle import (
     poly_smith_normal_form_with_transforms,
 )
 from snforacle.backends.pure_python_poly import poly_mat_mul
+from _mathelpers import assert_invertible_poly
 
 # ---------------------------------------------------------------------------
 # Available backends
@@ -219,6 +220,8 @@ class TestEvilPolySNFWithTransforms:
         assert _mat_eq(UMV, snf), (
             f"[{backend}] [{label}] U @ M @ V != SNF\nUMV={UMV}\nSNF={snf}"
         )
+        assert_invertible_poly(U, p, "U")
+        assert_invertible_poly(V, p, "V")
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +283,7 @@ class TestEvilPolyHNFWithTransform:
         assert _mat_eq(UM, hnf), (
             f"[{backend}] [{label}] U @ M != HNF\nUM={UM}\nHNF={hnf}"
         )
+        assert_invertible_poly(U, p, "U")
 
 
 # ---------------------------------------------------------------------------

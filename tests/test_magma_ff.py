@@ -20,6 +20,7 @@ from snforacle.ff_schema import (
     FFSNFResult,
     FFSNFWithTransformsResult,
 )
+from _mathelpers import assert_invertible_ff
 from snforacle.backends.pure_python_ff import mat_mul_ff
 
 pytestmark = pytest.mark.skipif(
@@ -124,6 +125,8 @@ class TestMagmaFFSNFWithTransforms:
         assert _is_snf(snf, nrows, ncols, result.rank)
         UMV = mat_mul_ff(mat_mul_ff(U, M, p), V, p)
         assert UMV == snf, f"U@M@V={UMV} != snf={snf}"
+        assert_invertible_ff(U, p, "U")
+        assert_invertible_ff(V, p, "V")
         return result
 
     def test_identity_p5(self):
@@ -203,6 +206,7 @@ class TestMagmaFFHNFWithTransform:
         assert _is_rref(H, nrows, ncols)
         UH = mat_mul_ff(U, M, p)
         assert UH == H, f"U@M={UH} != H={H}"
+        assert_invertible_ff(U, p, "U")
         return result
 
     def test_identity_p5(self):

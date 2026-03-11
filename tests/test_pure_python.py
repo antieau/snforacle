@@ -2,6 +2,7 @@
 
 import pytest
 
+from _mathelpers import assert_unimodular
 from snforacle import (
     elementary_divisors,
     hermite_normal_form,
@@ -167,6 +168,8 @@ class TestPurePythonSNFWithTransforms:
         UMV = _mat_mul(UM, V)
 
         assert UMV == snf, f"U @ M @ V != SNF: {UMV} != {snf}"
+        assert_unimodular(U, "U")
+        assert_unimodular(V, "V")
         assert result.invariant_factors == [2, 6, 12]
 
     def test_json_round_trip(self):
@@ -190,6 +193,8 @@ class TestPurePythonSNFWithTransforms:
         UMV = _mat_mul(UM, V)
 
         assert UMV == snf
+        assert_unimodular(U, "U")
+        assert_unimodular(V, "V")
         assert result.invariant_factors == [1, 3]
 
     def test_3x2_non_square(self):
@@ -204,6 +209,8 @@ class TestPurePythonSNFWithTransforms:
         UMV = _mat_mul(UM, V)
 
         assert UMV == snf
+        assert_unimodular(U, "U")
+        assert_unimodular(V, "V")
         assert result.invariant_factors == [1, 3]
 
 
@@ -279,6 +286,7 @@ class TestPurePythonHNFWithTransform:
         # Verify U @ M == HNF
         UM = _mat_mul(U, M)
         assert UM == hnf, f"U @ M != HNF: {UM} != {hnf}"
+        assert_unimodular(U, "U")
 
     def test_identity_2x2(self):
         M = [[1, 0], [0, 1]]
@@ -289,6 +297,7 @@ class TestPurePythonHNFWithTransform:
 
         UM = _mat_mul(U, M)
         assert UM == hnf
+        assert_unimodular(U, "U")
 
     def test_2x3_non_square(self):
         M = [[1, 2, 3], [4, 5, 6]]
@@ -299,6 +308,7 @@ class TestPurePythonHNFWithTransform:
 
         UM = _mat_mul(U, M)
         assert UM == hnf
+        assert_unimodular(U, "U")
 
     def test_3x2_non_square(self):
         M = [[1, 4], [2, 5], [3, 6]]
@@ -309,6 +319,7 @@ class TestPurePythonHNFWithTransform:
 
         UM = _mat_mul(U, M)
         assert UM == hnf
+        assert_unimodular(U, "U")
 
 
 # ---------------------------------------------------------------------------

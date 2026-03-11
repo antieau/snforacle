@@ -14,6 +14,7 @@ from snforacle import (
     poly_smith_normal_form_with_transforms,
 )
 from snforacle.backends.pure_python_poly import poly_mat_mul
+from _mathelpers import assert_invertible_poly
 
 pytestmark = pytest.mark.skipif(
     shutil.which("sage") is None,
@@ -113,6 +114,8 @@ class TestSagePolySNFWithTransforms:
         UM = poly_mat_mul(U, m_entries, p)
         UMV = poly_mat_mul(UM, V, p)
         assert _mat_eq(UMV, snf), f"U @ M @ V != SNF"
+        assert_invertible_poly(U, p, "U")
+        assert_invertible_poly(V, p, "V")
 
     def test_identity_2x2_f2(self):
         self._verify(_dense(_I2, 2), 2)
@@ -161,6 +164,7 @@ class TestSagePolyHNFWithTransform:
         m_entries = matrix_dict["entries"]
         UM = poly_mat_mul(U, m_entries, p)
         assert _mat_eq(UM, hnf), f"U @ M != HNF"
+        assert_invertible_poly(U, p, "U")
 
     def test_identity_2x2_f2(self):
         self._verify(_dense(_I2, 2), 2)

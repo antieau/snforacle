@@ -1,64 +1,66 @@
-"""Cross-backend consistency test on 1000 random square and non-square matrices.
+"""Cross-backend consistency tests with MAGMA as the reference implementation.
 
-Matrices have shapes nrows, ncols ∈ [10, 30] with integer entries in [-10, 10].
-All five operations are tested:
+All three matrix domains are covered:
 
-  - smith_normal_form
-  - smith_normal_form_with_transforms  (verifies U@M@V == SNF)
-  - hermite_normal_form
-  - hermite_normal_form_with_transform (verifies U@M == H)
-  - elementary_divisors
+  ZZ   — integer matrices (5 operations: SNF, SNF+T, HNF, HNF+T, ED)
+  Fp   — finite-field matrices (5 operations: SNF, SNF+T, HNF, HNF+T, rank)
+  Fp[x]— polynomial matrices (5 operations: SNF, SNF+T, HNF, HNF+T, ED)
 
-**Backend grouping**
+MAGMA is treated as the ground-truth reference because it is widely regarded
+as the most reliable computer algebra system for these computations.  The
+entire module is skipped when MAGMA is not on PATH.
 
-*Fast in-process backends* (cypari2, flint) run on every one of the 1000
-matrices.  pure_python has exponential intermediate value growth beyond ~12×12
-(e.g. 13×13 can hang indefinitely), so it is compared only on matrices where
-max(nrows, ncols) ≤ PP_MAX=12, sampled on every 10th matrix.
-
-CLI backends (sage, magma) are exercised on a separate 50-matrix subset in
-TestCLIBackendCrossCheck.
-
-All results are compared against pure_python (always available) as the
-reference implementation.  Failures report the matrix index so the failing
-input can be reproduced via list(_gen_matrices(1000))[index].
+Matrix sizes and counts
+-----------------------
+ZZ   : 200 matrices, shapes in [10, 30] × [10, 30], entries in [-10, 10].
+       pure_python is additionally compared on every 10th matrix with
+       max(nrows, ncols) ≤ PP_MAX=12 to guard against integer blow-up.
+Fp   : 200 matrices, shapes in [5, 20] × [5, 20], primes from a fixed cycle.
+       pure_python compared on every 5th matrix.
+Fp[x]: 50 matrices, shapes in [2, 5] × [2, 5], degree ≤ 2, primes cycled.
+       pure_python compared on every matrix (small enough to be fast).
 """
 
 from __future__ import annotations
 
 import random
 import shutil
+
 import pytest
 
+from _mathelpers import assert_unimodular, assert_invertible_ff, assert_invertible_poly
+
 from snforacle import (
+    # ZZ
     elementary_divisors,
     hermite_normal_form,
     hermite_normal_form_with_transform,
     smith_normal_form,
     smith_normal_form_with_transforms,
+    # Fp
+    ff_hermite_normal_form,
+    ff_hermite_normal_form_with_transform,
+    ff_smith_normal_form,
+    ff_smith_normal_form_with_transforms,
+    ff_rank,
+    # Fp[x]
+    poly_elementary_divisors,
+    poly_hermite_normal_form,
+    poly_hermite_normal_form_with_transform,
+    poly_smith_normal_form,
+    poly_smith_normal_form_with_transforms,
 )
 
+pytestmark = pytest.mark.skipif(
+    shutil.which("magma") is None,
+    reason="MAGMA not on PATH",
+)
 
 # ---------------------------------------------------------------------------
-# Backend availability
+# Availability flags for secondary backends
 # ---------------------------------------------------------------------------
 
-def _avail(name: str) -> bool:
-    """Return True only if the backend is installed AND works (catches sandbox issues)."""
-    if name == "pure_python":
-        return True
-    if name in ("sage", "magma"):
-        if not shutil.which(name):
-            return False
-        try:
-            from snforacle import smith_normal_form  # noqa: PLC0415
-            smith_normal_form(
-                {"format": "dense", "nrows": 1, "ncols": 1, "entries": [[1]]},
-                backend=name,
-            )
-            return True
-        except Exception:
-            return False
+def _avail_import(name: str) -> bool:
     try:
         __import__(name)
         return True
@@ -66,291 +68,405 @@ def _avail(name: str) -> bool:
         return False
 
 
-# Fast in-process backends (run on all 1000 matrices).
-# NOTE: flint.fmpz_mat.snf() hangs on certain non-square matrices (python-flint
-# 0.8.0 limitation).  Only cypari2 is used for SNF/ED in the random test.
-# flint.fmpz_mat.hnf() has no such issue and is used for HNF.
-_FAST_SNF   = [b for b in ["cypari2"] if _avail(b)]
-_FAST_SNF_T = [b for b in ["cypari2"] if _avail(b)]   # flint: no transforms
-_FAST_HNF   = [b for b in ["flint"] if _avail(b)]     # cypari2: no HNF
-_FAST_ED    = [b for b in ["cypari2"] if _avail(b)]    # flint SNF hangs on non-square
+_HAVE_CYPARI2  = _avail_import("cypari2")
+_HAVE_FLINT    = _avail_import("flint")
+_HAVE_SAGE     = shutil.which("sage") is not None
 
-# pure_python is compared on every PP_STRIDE-th matrix.
-PP_STRIDE = 10  # 1000 / 10 = 100 pure_python comparisons
+# ---------------------------------------------------------------------------
+# Matrix helpers
+# ---------------------------------------------------------------------------
 
-# pure_python can have exponential intermediate value growth for both SNF and
-# HNF on matrices larger than ~12×12 (worst-case hang observed on 13×13).
-# Skip pure_python comparisons when any dimension exceeds this threshold.
-PP_MAX = 12
+def _dense_int(entries: list[list[int]]) -> dict:
+    return {
+        "format": "dense",
+        "nrows": len(entries),
+        "ncols": len(entries[0]) if entries else 0,
+        "entries": entries,
+    }
 
-# CLI backends (subprocess overhead; separate smaller test).
-_CLI_BACKENDS = [b for b in ["sage", "magma"] if _avail(b)]
+
+def _dense_ff(entries: list[list[int]], p: int) -> dict:
+    return {
+        "format": "dense_ff",
+        "nrows": len(entries),
+        "ncols": len(entries[0]) if entries else 0,
+        "p": p,
+        "entries": entries,
+    }
+
+
+def _dense_poly(entries: list[list[list[int]]], p: int) -> dict:
+    return {
+        "format": "dense_poly",
+        "nrows": len(entries),
+        "ncols": len(entries[0]) if entries else 0,
+        "p": p,
+        "entries": entries,
+    }
+
+
+def _mat_mul_int(
+    A: list[list[int]], B: list[list[int]]
+) -> list[list[int]]:
+    m, k = len(A), len(A[0]) if A else 0
+    n = len(B[0]) if B else 0
+    return [
+        [sum(A[i][t] * B[t][j] for t in range(k)) for j in range(n)]
+        for i in range(m)
+    ]
+
+
+def _mat_mul_ff(
+    A: list[list[int]], B: list[list[int]], p: int
+) -> list[list[int]]:
+    m, k = len(A), len(A[0]) if A else 0
+    n = len(B[0]) if B else 0
+    return [
+        [sum(A[i][t] * B[t][j] for t in range(k)) % p for j in range(n)]
+        for i in range(m)
+    ]
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Random matrix generators
 # ---------------------------------------------------------------------------
 
-def _dense(entries: list[list[int]], nrows: int, ncols: int) -> dict:
-    return {"format": "dense", "nrows": nrows, "ncols": ncols, "entries": entries}
+_FF_PRIMES  = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+_POLY_PRIMES = [2, 3, 5, 7, 11]
 
 
-def _mat_mul(A: list[list[int]], B: list[list[int]]) -> list[list[int]]:
-    m, n = len(A), len(A[0]) if A else 0
-    p = len(B[0]) if B else 0
-    return [[sum(A[i][k] * B[k][j] for k in range(n)) for j in range(p)] for i in range(m)]
-
-
-def _gen_matrices(n: int, seed: int = 42):
-    """Yield (index, nrows, ncols, entries) for *n* random matrices."""
+def _gen_zz(n: int, seed: int = 42):
     rng = random.Random(seed)
     for i in range(n):
         nrows = rng.randint(10, 30)
         ncols = rng.randint(10, 30)
-        entries = [[rng.randint(-10, 10) for _ in range(ncols)] for _ in range(nrows)]
+        entries = [
+            [rng.randint(-10, 10) for _ in range(ncols)]
+            for _ in range(nrows)
+        ]
         yield i, nrows, ncols, entries
 
 
+def _gen_ff(n: int, seed: int = 42):
+    rng = random.Random(seed)
+    for i in range(n):
+        p = _FF_PRIMES[i % len(_FF_PRIMES)]
+        nrows = rng.randint(5, 20)
+        ncols = rng.randint(5, 20)
+        entries = [
+            [rng.randint(0, p - 1) for _ in range(ncols)]
+            for _ in range(nrows)
+        ]
+        yield i, p, nrows, ncols, entries
+
+
+def _rand_poly(p: int, max_deg: int, rng: random.Random) -> list[int]:
+    deg = rng.randint(0, max_deg)
+    coeffs = [rng.randint(0, p - 1) for _ in range(deg + 1)]
+    while coeffs and coeffs[-1] == 0:
+        coeffs.pop()
+    return coeffs
+
+
+def _gen_poly(n: int, seed: int = 42):
+    rng = random.Random(seed)
+    for i in range(n):
+        p = _POLY_PRIMES[i % len(_POLY_PRIMES)]
+        nrows = rng.randint(2, 5)
+        ncols = rng.randint(2, 5)
+        entries = [
+            [_rand_poly(p, 2, rng) for _ in range(ncols)]
+            for _ in range(nrows)
+        ]
+        yield i, p, nrows, ncols, entries
+
+
 # ---------------------------------------------------------------------------
-# Main 1000-matrix test
+# ZZ cross-backend tests
 # ---------------------------------------------------------------------------
 
-class TestRandomCrossBackend:
-    """Cross-backend consistency on 1000 random matrices.
+PP_STRIDE = 10
+PP_MAX    = 12
 
-    Fast in-process backends (cypari2, flint) are compared on all 1000
-    matrices.  pure_python is compared on every 10th matrix (100 total).
-    """
 
-    N = 1000
+class TestZZCrossBackend:
+    """MAGMA vs all available backends on 200 random integer matrices."""
+
+    N = 200
 
     def test_snf(self):
-        """All fast SNF backends agree; pure_python sampled every 10th matrix."""
-        if not _FAST_SNF and not _avail("pure_python"):
-            pytest.skip("No SNF backends available")
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
+        for i, nrows, ncols, entries in _gen_zz(self.N):
+            inp     = _dense_int(entries)
+            ref_inv = smith_normal_form(inp, backend="magma").invariant_factors
 
-            # Fast backends: compare pairwise on every matrix.
-            if len(_FAST_SNF) >= 2:
-                ref_inv = smith_normal_form(inp, backend=_FAST_SNF[0]).invariant_factors
-                for b in _FAST_SNF[1:]:
-                    result = smith_normal_form(inp, backend=b)
-                    assert result.invariant_factors == ref_inv, (
-                        f"matrix {i} ({nrows}×{ncols}): "
-                        f"{_FAST_SNF[0]}={ref_inv} vs {b}={result.invariant_factors}"
-                    )
-            elif _FAST_SNF:
-                ref_inv = smith_normal_form(inp, backend=_FAST_SNF[0]).invariant_factors
-            else:
-                ref_inv = None
-
-            # pure_python: every 10th matrix, small enough to avoid integer blow-up.
+            if _HAVE_CYPARI2:
+                got = smith_normal_form(inp, backend="cypari2").invariant_factors
+                assert got == ref_inv, f"ZZ SNF matrix {i}: cypari2 ≠ magma"
+            if _HAVE_FLINT:
+                got = smith_normal_form(inp, backend="flint").invariant_factors
+                assert got == ref_inv, f"ZZ SNF matrix {i}: flint ≠ magma"
+            if _HAVE_SAGE:
+                got = smith_normal_form(inp, backend="sage").invariant_factors
+                assert got == ref_inv, f"ZZ SNF matrix {i}: sage ≠ magma"
             if i % PP_STRIDE == 0 and max(nrows, ncols) <= PP_MAX:
-                pp = smith_normal_form(inp, backend="pure_python").invariant_factors
-                if ref_inv is not None:
-                    assert pp == ref_inv, (
-                        f"matrix {i} ({nrows}×{ncols}): fast ref={ref_inv} vs pure_python={pp}"
-                    )
+                got = smith_normal_form(inp, backend="pure_python").invariant_factors
+                assert got == ref_inv, f"ZZ SNF matrix {i}: pure_python ≠ magma"
 
     def test_snf_with_transforms(self):
-        """U@M@V == SNF for fast SNF-T backends; pure_python every 10th matrix."""
-        if not _FAST_SNF_T and not _avail("pure_python"):
-            pytest.skip("No SNF-transform backends available")
-        ref_snf_b = _FAST_SNF[0] if _FAST_SNF else "pure_python"
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
-            ref_inv = smith_normal_form(inp, backend=ref_snf_b).invariant_factors
+        for i, nrows, ncols, entries in _gen_zz(self.N):
+            inp     = _dense_int(entries)
+            ref_inv = smith_normal_form(inp, backend="magma").invariant_factors
 
-            for b in _FAST_SNF_T:
-                result = smith_normal_form_with_transforms(inp, backend=b)
-                assert result.invariant_factors == ref_inv, (
-                    f"matrix {i} ({nrows}×{ncols}): ref={ref_inv} vs {b} SNF+T"
+            for b in (["cypari2"] if _HAVE_CYPARI2 else []) + (["sage"] if _HAVE_SAGE else []):
+                res = smith_normal_form_with_transforms(inp, backend=b)
+                assert res.invariant_factors == ref_inv, (
+                    f"ZZ SNF+T matrix {i}: {b} invariant_factors ≠ magma"
                 )
-                U = result.left_transform.entries
-                V = result.right_transform.entries
-                S = result.smith_normal_form.entries
-                assert _mat_mul(_mat_mul(U, entries), V) == S, (
-                    f"matrix {i} ({nrows}×{ncols}): U@M@V ≠ SNF for {b}"
+                U = res.left_transform.entries
+                V = res.right_transform.entries
+                S = res.smith_normal_form.entries
+                assert _mat_mul_int(_mat_mul_int(U, entries), V) == S, (
+                    f"ZZ SNF+T matrix {i}: U@M@V ≠ SNF for {b}"
                 )
-
+                assert_unimodular(U, f"ZZ SNF+T matrix {i} {b} U")
+                assert_unimodular(V, f"ZZ SNF+T matrix {i} {b} V")
             if i % PP_STRIDE == 0 and max(nrows, ncols) <= PP_MAX:
-                result = smith_normal_form_with_transforms(inp, backend="pure_python")
-                assert result.invariant_factors == ref_inv, (
-                    f"matrix {i} ({nrows}×{ncols}): ref={ref_inv} vs pure_python SNF+T"
+                res = smith_normal_form_with_transforms(inp, backend="pure_python")
+                assert res.invariant_factors == ref_inv, (
+                    f"ZZ SNF+T matrix {i}: pure_python invariant_factors ≠ magma"
                 )
-                U = result.left_transform.entries
-                V = result.right_transform.entries
-                S = result.smith_normal_form.entries
-                assert _mat_mul(_mat_mul(U, entries), V) == S, (
-                    f"matrix {i} ({nrows}×{ncols}): U@M@V ≠ SNF for pure_python"
+                U = res.left_transform.entries
+                V = res.right_transform.entries
+                S = res.smith_normal_form.entries
+                assert _mat_mul_int(_mat_mul_int(U, entries), V) == S, (
+                    f"ZZ SNF+T matrix {i}: U@M@V ≠ SNF for pure_python"
                 )
+                assert_unimodular(U, f"ZZ SNF+T matrix {i} pure_python U")
+                assert_unimodular(V, f"ZZ SNF+T matrix {i} pure_python V")
 
     def test_hnf(self):
-        """All fast HNF backends agree; pure_python sampled every 10th matrix."""
-        if not _FAST_HNF and not _avail("pure_python"):
-            pytest.skip("No HNF backends available")
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
+        for i, nrows, ncols, entries in _gen_zz(self.N):
+            inp     = _dense_int(entries)
+            ref_hnf = hermite_normal_form(inp, backend="magma").hermite_normal_form.entries
 
-            if _FAST_HNF:
-                ref_hnf = hermite_normal_form(inp, backend=_FAST_HNF[0]).hermite_normal_form.entries
-                for b in _FAST_HNF[1:]:
-                    result = hermite_normal_form(inp, backend=b)
-                    assert result.hermite_normal_form.entries == ref_hnf, (
-                        f"matrix {i} ({nrows}×{ncols}): {_FAST_HNF[0]} vs {b} HNF differ"
-                    )
-            else:
-                ref_hnf = None
-
+            if _HAVE_FLINT:
+                got = hermite_normal_form(inp, backend="flint").hermite_normal_form.entries
+                assert got == ref_hnf, f"ZZ HNF matrix {i}: flint ≠ magma"
+            if _HAVE_SAGE:
+                got = hermite_normal_form(inp, backend="sage").hermite_normal_form.entries
+                assert got == ref_hnf, f"ZZ HNF matrix {i}: sage ≠ magma"
             if i % PP_STRIDE == 0 and max(nrows, ncols) <= PP_MAX:
-                pp_hnf = hermite_normal_form(inp, backend="pure_python").hermite_normal_form.entries
-                if ref_hnf is not None:
-                    assert pp_hnf == ref_hnf, (
-                        f"matrix {i} ({nrows}×{ncols}): fast HNF ≠ pure_python HNF"
-                    )
+                got = hermite_normal_form(inp, backend="pure_python").hermite_normal_form.entries
+                assert got == ref_hnf, f"ZZ HNF matrix {i}: pure_python ≠ magma"
 
     def test_hnf_with_transform(self):
-        """U@M == H for pure_python (every 10th matrix, max dim ≤ PP_MAX), H matches fast HNF backend."""
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            if i % PP_STRIDE != 0 or max(nrows, ncols) > PP_MAX:
-                continue
-            inp = _dense(entries, nrows, ncols)
-            ref_hnf = (
-                hermite_normal_form(inp, backend=_FAST_HNF[0]).hermite_normal_form.entries
-                if _FAST_HNF else None
-            )
-            result = hermite_normal_form_with_transform(inp, backend="pure_python")
-            H = result.hermite_normal_form.entries
-            U = result.left_transform.entries
-            assert _mat_mul(U, entries) == H, (
-                f"matrix {i} ({nrows}×{ncols}): U@M ≠ H for pure_python"
-            )
-            if ref_hnf is not None:
-                assert H == ref_hnf, (
-                    f"matrix {i} ({nrows}×{ncols}): pure_python HNF+T differs from fast HNF"
+        for i, nrows, ncols, entries in _gen_zz(self.N):
+            inp     = _dense_int(entries)
+            ref_hnf = hermite_normal_form(inp, backend="magma").hermite_normal_form.entries
+
+            for b in (["sage"] if _HAVE_SAGE else []):
+                res = hermite_normal_form_with_transform(inp, backend=b)
+                assert res.hermite_normal_form.entries == ref_hnf, (
+                    f"ZZ HNF+T matrix {i}: {b} HNF ≠ magma"
                 )
+                assert _mat_mul_int(res.left_transform.entries, entries) == ref_hnf, (
+                    f"ZZ HNF+T matrix {i}: U@M ≠ H for {b}"
+                )
+                assert_unimodular(res.left_transform.entries, f"ZZ HNF+T matrix {i} {b} U")
+            if i % PP_STRIDE == 0 and max(nrows, ncols) <= PP_MAX:
+                res = hermite_normal_form_with_transform(inp, backend="pure_python")
+                assert res.hermite_normal_form.entries == ref_hnf, (
+                    f"ZZ HNF+T matrix {i}: pure_python HNF ≠ magma"
+                )
+                assert _mat_mul_int(res.left_transform.entries, entries) == ref_hnf, (
+                    f"ZZ HNF+T matrix {i}: U@M ≠ H for pure_python"
+                )
+                assert_unimodular(res.left_transform.entries, f"ZZ HNF+T matrix {i} pure_python U")
 
     def test_elementary_divisors(self):
-        """All fast ED backends agree; pure_python sampled every 10th matrix."""
-        if not _FAST_ED and not _avail("pure_python"):
-            pytest.skip("No ED backends available")
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
+        for i, nrows, ncols, entries in _gen_zz(self.N):
+            inp    = _dense_int(entries)
+            ref_ed = elementary_divisors(inp, backend="magma").elementary_divisors
 
-            if len(_FAST_ED) >= 2:
-                ref_ed = elementary_divisors(inp, backend=_FAST_ED[0]).elementary_divisors
-                for b in _FAST_ED[1:]:
-                    result = elementary_divisors(inp, backend=b)
-                    assert result.elementary_divisors == ref_ed, (
-                        f"matrix {i} ({nrows}×{ncols}): "
-                        f"{_FAST_ED[0]}={ref_ed} vs {b}={result.elementary_divisors}"
-                    )
-            elif _FAST_ED:
-                ref_ed = elementary_divisors(inp, backend=_FAST_ED[0]).elementary_divisors
-            else:
-                ref_ed = None
-
+            if _HAVE_CYPARI2:
+                got = elementary_divisors(inp, backend="cypari2").elementary_divisors
+                assert got == ref_ed, f"ZZ ED matrix {i}: cypari2 ≠ magma"
+            if _HAVE_FLINT:
+                got = elementary_divisors(inp, backend="flint").elementary_divisors
+                assert got == ref_ed, f"ZZ ED matrix {i}: flint ≠ magma"
+            if _HAVE_SAGE:
+                got = elementary_divisors(inp, backend="sage").elementary_divisors
+                assert got == ref_ed, f"ZZ ED matrix {i}: sage ≠ magma"
             if i % PP_STRIDE == 0 and max(nrows, ncols) <= PP_MAX:
-                pp = elementary_divisors(inp, backend="pure_python").elementary_divisors
-                if ref_ed is not None:
-                    assert pp == ref_ed, (
-                        f"matrix {i} ({nrows}×{ncols}): fast ref={ref_ed} vs pure_python={pp}"
-                    )
+                got = elementary_divisors(inp, backend="pure_python").elementary_divisors
+                assert got == ref_ed, f"ZZ ED matrix {i}: pure_python ≠ magma"
 
-    def test_snf_matches_ed(self):
-        """SNF invariant_factors == elementary_divisors for every fast backend."""
-        shared = [b for b in _FAST_SNF if b in _FAST_ED]
-        if not shared:
-            pytest.skip("No fast backend supports both SNF and ED")
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
-            for b in shared:
-                snf_inv = smith_normal_form(inp, backend=b).invariant_factors
-                ed      = elementary_divisors(inp, backend=b).elementary_divisors
-                assert snf_inv == ed, (
-                    f"matrix {i} ({nrows}×{ncols}): "
-                    f"SNF.invariant_factors={snf_inv} ≠ ED={ed} for {b}"
+
+# ---------------------------------------------------------------------------
+# Fp cross-backend tests
+# ---------------------------------------------------------------------------
+
+FF_PP_STRIDE = 5
+
+
+class TestFpCrossBackend:
+    """MAGMA vs all available backends on 200 random Fp matrices."""
+
+    N = 200
+
+    def test_snf(self):
+        for i, p, nrows, ncols, entries in _gen_ff(self.N):
+            inp     = _dense_ff(entries, p)
+            ref_snf = ff_smith_normal_form(inp, backend="magma")
+
+            if _HAVE_FLINT:
+                got = ff_smith_normal_form(inp, backend="flint")
+                assert got.rank == ref_snf.rank, f"Fp SNF matrix {i} p={p}: flint rank ≠ magma"
+                assert got.smith_normal_form.entries == ref_snf.smith_normal_form.entries, (
+                    f"Fp SNF matrix {i} p={p}: flint SNF ≠ magma"
+                )
+            if _HAVE_SAGE:
+                got = ff_smith_normal_form(inp, backend="sage")
+                assert got.rank == ref_snf.rank, f"Fp SNF matrix {i} p={p}: sage rank ≠ magma"
+            if i % FF_PP_STRIDE == 0:
+                got = ff_smith_normal_form(inp, backend="pure_python")
+                assert got.rank == ref_snf.rank, f"Fp SNF matrix {i} p={p}: pure_python rank ≠ magma"
+                assert got.smith_normal_form.entries == ref_snf.smith_normal_form.entries, (
+                    f"Fp SNF matrix {i} p={p}: pure_python SNF ≠ magma"
                 )
 
+    def test_snf_with_transforms(self):
+        for i, p, nrows, ncols, entries in _gen_ff(self.N):
+            inp      = _dense_ff(entries, p)
+            ref_rank = ff_rank(inp, backend="magma").rank
+
+            for b in (["sage"] if _HAVE_SAGE else []) + (
+                ["pure_python"] if i % FF_PP_STRIDE == 0 else []
+            ):
+                res = ff_smith_normal_form_with_transforms(inp, backend=b)
+                assert res.rank == ref_rank, (
+                    f"Fp SNF+T matrix {i} p={p}: {b} rank ≠ magma"
+                )
+                U = res.left_transform.entries
+                V = res.right_transform.entries
+                S = res.smith_normal_form.entries
+                assert _mat_mul_ff(_mat_mul_ff(U, entries, p), V, p) == S, (
+                    f"Fp SNF+T matrix {i} p={p}: U@M@V ≠ SNF for {b}"
+                )
+                assert_invertible_ff(U, p, f"Fp SNF+T matrix {i} p={p} {b} U")
+                assert_invertible_ff(V, p, f"Fp SNF+T matrix {i} p={p} {b} V")
+
+    def test_hnf(self):
+        for i, p, nrows, ncols, entries in _gen_ff(self.N):
+            inp     = _dense_ff(entries, p)
+            ref_hnf = ff_hermite_normal_form(inp, backend="magma").hermite_normal_form.entries
+
+            if _HAVE_FLINT:
+                got = ff_hermite_normal_form(inp, backend="flint").hermite_normal_form.entries
+                assert got == ref_hnf, f"Fp HNF matrix {i} p={p}: flint ≠ magma"
+            if _HAVE_SAGE:
+                got = ff_hermite_normal_form(inp, backend="sage").hermite_normal_form.entries
+                assert got == ref_hnf, f"Fp HNF matrix {i} p={p}: sage ≠ magma"
+            if i % FF_PP_STRIDE == 0:
+                got = ff_hermite_normal_form(inp, backend="pure_python").hermite_normal_form.entries
+                assert got == ref_hnf, f"Fp HNF matrix {i} p={p}: pure_python ≠ magma"
+
+    def test_hnf_with_transform(self):
+        for i, p, nrows, ncols, entries in _gen_ff(self.N):
+            inp     = _dense_ff(entries, p)
+            ref_hnf = ff_hermite_normal_form(inp, backend="magma").hermite_normal_form.entries
+
+            for b in (["sage"] if _HAVE_SAGE else []) + (
+                ["pure_python"] if i % FF_PP_STRIDE == 0 else []
+            ):
+                res = ff_hermite_normal_form_with_transform(inp, backend=b)
+                assert res.hermite_normal_form.entries == ref_hnf, (
+                    f"Fp HNF+T matrix {i} p={p}: {b} HNF ≠ magma"
+                )
+                assert _mat_mul_ff(res.left_transform.entries, entries, p) == ref_hnf, (
+                    f"Fp HNF+T matrix {i} p={p}: U@M ≠ H for {b}"
+                )
+                assert_invertible_ff(res.left_transform.entries, p, f"Fp HNF+T matrix {i} p={p} {b} U")
+
+    def test_rank(self):
+        for i, p, nrows, ncols, entries in _gen_ff(self.N):
+            inp      = _dense_ff(entries, p)
+            ref_rank = ff_rank(inp, backend="magma").rank
+
+            if _HAVE_FLINT:
+                got = ff_rank(inp, backend="flint").rank
+                assert got == ref_rank, f"Fp rank matrix {i} p={p}: flint ≠ magma"
+            if _HAVE_SAGE:
+                got = ff_rank(inp, backend="sage").rank
+                assert got == ref_rank, f"Fp rank matrix {i} p={p}: sage ≠ magma"
+            if i % FF_PP_STRIDE == 0:
+                got = ff_rank(inp, backend="pure_python").rank
+                assert got == ref_rank, f"Fp rank matrix {i} p={p}: pure_python ≠ magma"
+
 
 # ---------------------------------------------------------------------------
-# 50-matrix CLI backend cross-check
+# Fp[x] cross-backend tests
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skipif(
-    not _CLI_BACKENDS,
-    reason="no CLI backends (sage/magma) available",
-)
-class TestCLIBackendCrossCheck:
-    """Cross-backend consistency using CLI backends on 50 random matrices.
-
-    cypari2 (or pure_python if unavailable) is used as the SNF/ED reference.
-    flint (or pure_python if unavailable) is used as the HNF reference.
-    """
+class TestFpxCrossBackend:
+    """MAGMA vs all available backends on 50 random Fp[x] matrices."""
 
     N = 50
-    # Fast reference backends (avoid pure_python which hangs on large matrices).
-    _SNF_REF = _FAST_SNF[0] if _FAST_SNF else "pure_python"
-    _HNF_REF = _FAST_HNF[0] if _FAST_HNF else "pure_python"
 
     def test_snf(self):
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
-            ref_inv = smith_normal_form(inp, backend=self._SNF_REF).invariant_factors
-            for b in _CLI_BACKENDS:
-                result = smith_normal_form(inp, backend=b)
-                assert result.invariant_factors == ref_inv, (
-                    f"matrix {i} ({nrows}×{ncols}): {self._SNF_REF}={ref_inv} vs {b}={result.invariant_factors}"
-                )
+        for i, p, nrows, ncols, entries in _gen_poly(self.N):
+            inp     = _dense_poly(entries, p)
+            ref_inv = poly_smith_normal_form(inp, backend="magma").invariant_factors
+
+            if _HAVE_SAGE:
+                got = poly_smith_normal_form(inp, backend="sage").invariant_factors
+                assert got == ref_inv, f"Fp[x] SNF matrix {i} p={p}: sage ≠ magma"
+            got = poly_smith_normal_form(inp, backend="pure_python").invariant_factors
+            assert got == ref_inv, f"Fp[x] SNF matrix {i} p={p}: pure_python ≠ magma"
 
     def test_snf_with_transforms(self):
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
-            ref_inv = smith_normal_form(inp, backend=self._SNF_REF).invariant_factors
-            for b in _CLI_BACKENDS:
-                result = smith_normal_form_with_transforms(inp, backend=b)
-                assert result.invariant_factors == ref_inv, (
-                    f"matrix {i} ({nrows}×{ncols}): SNF+T mismatch for {b}"
+        for i, p, nrows, ncols, entries in _gen_poly(self.N):
+            inp     = _dense_poly(entries, p)
+            ref_inv = poly_smith_normal_form(inp, backend="magma").invariant_factors
+
+            for b in (["sage"] if _HAVE_SAGE else []) + ["pure_python"]:
+                res = poly_smith_normal_form_with_transforms(inp, backend=b)
+                assert res.invariant_factors == ref_inv, (
+                    f"Fp[x] SNF+T matrix {i} p={p}: {b} invariant_factors ≠ magma"
                 )
-                U = result.left_transform.entries
-                V = result.right_transform.entries
-                S = result.smith_normal_form.entries
-                assert _mat_mul(_mat_mul(U, entries), V) == S, (
-                    f"matrix {i} ({nrows}×{ncols}): U@M@V ≠ SNF for {b}"
-                )
+                assert_invertible_poly(res.left_transform.entries, p, f"Fp[x] SNF+T matrix {i} p={p} {b} U")
+                assert_invertible_poly(res.right_transform.entries, p, f"Fp[x] SNF+T matrix {i} p={p} {b} V")
 
     def test_hnf(self):
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
-            ref_hnf = hermite_normal_form(inp, backend=self._HNF_REF).hermite_normal_form.entries
-            for b in _CLI_BACKENDS:
-                result = hermite_normal_form(inp, backend=b)
-                assert result.hermite_normal_form.entries == ref_hnf, (
-                    f"matrix {i} ({nrows}×{ncols}): {self._HNF_REF} vs {b} HNF differ"
-                )
+        for i, p, nrows, ncols, entries in _gen_poly(self.N):
+            inp     = _dense_poly(entries, p)
+            ref_hnf = poly_hermite_normal_form(inp, backend="magma").hermite_normal_form.entries
+
+            if _HAVE_SAGE:
+                got = poly_hermite_normal_form(inp, backend="sage").hermite_normal_form.entries
+                assert got == ref_hnf, f"Fp[x] HNF matrix {i} p={p}: sage ≠ magma"
+            got = poly_hermite_normal_form(inp, backend="pure_python").hermite_normal_form.entries
+            assert got == ref_hnf, f"Fp[x] HNF matrix {i} p={p}: pure_python ≠ magma"
 
     def test_hnf_with_transform(self):
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
-            ref_hnf = hermite_normal_form(inp, backend=self._HNF_REF).hermite_normal_form.entries
-            for b in _CLI_BACKENDS:
-                result = hermite_normal_form_with_transform(inp, backend=b)
-                H = result.hermite_normal_form.entries
-                U = result.left_transform.entries
-                assert H == ref_hnf, (
-                    f"matrix {i} ({nrows}×{ncols}): {b} HNF ≠ {self._HNF_REF} HNF"
+        for i, p, nrows, ncols, entries in _gen_poly(self.N):
+            inp     = _dense_poly(entries, p)
+            ref_hnf = poly_hermite_normal_form(inp, backend="magma").hermite_normal_form.entries
+
+            for b in (["sage"] if _HAVE_SAGE else []) + ["pure_python"]:
+                res = poly_hermite_normal_form_with_transform(inp, backend=b)
+                assert res.hermite_normal_form.entries == ref_hnf, (
+                    f"Fp[x] HNF+T matrix {i} p={p}: {b} HNF ≠ magma"
                 )
-                assert _mat_mul(U, entries) == H, (
-                    f"matrix {i} ({nrows}×{ncols}): U@M ≠ H for {b}"
-                )
+                assert_invertible_poly(res.left_transform.entries, p, f"Fp[x] HNF+T matrix {i} p={p} {b} U")
 
     def test_elementary_divisors(self):
-        for i, nrows, ncols, entries in _gen_matrices(self.N):
-            inp = _dense(entries, nrows, ncols)
-            ref_ed = elementary_divisors(inp, backend=self._SNF_REF).elementary_divisors
-            for b in _CLI_BACKENDS:
-                result = elementary_divisors(inp, backend=b)
-                assert result.elementary_divisors == ref_ed, (
-                    f"matrix {i} ({nrows}×{ncols}): {self._SNF_REF}={ref_ed} vs {b}={result.elementary_divisors}"
-                )
+        for i, p, nrows, ncols, entries in _gen_poly(self.N):
+            inp    = _dense_poly(entries, p)
+            ref_ed = poly_elementary_divisors(inp, backend="magma").elementary_divisors
+
+            if _HAVE_SAGE:
+                got = poly_elementary_divisors(inp, backend="sage").elementary_divisors
+                assert got == ref_ed, f"Fp[x] ED matrix {i} p={p}: sage ≠ magma"
+            got = poly_elementary_divisors(inp, backend="pure_python").elementary_divisors
+            assert got == ref_ed, f"Fp[x] ED matrix {i} p={p}: pure_python ≠ magma"

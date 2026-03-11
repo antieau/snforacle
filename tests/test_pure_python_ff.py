@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from _mathelpers import assert_invertible_ff
 from snforacle.backends.pure_python_ff import (
     PurePythonFFBackend,
     _hnf_with_transform,
@@ -143,6 +144,8 @@ class TestSNFWithTransforms:
         UM = mat_mul_ff(U, M, p)
         UMV = mat_mul_ff(UM, V, p)
         assert UMV == snf, f"U @ M @ V ≠ snf\nU={U}\nM={M}\nV={V}\nUMV={UMV}\nsnf={snf}"
+        assert_invertible_ff(U, p, "U")
+        assert_invertible_ff(V, p, "V")
         return snf, rank, U, V
 
     def test_identity_2x2_p5(self):
@@ -233,6 +236,7 @@ class TestHNFWithTransform:
         assert _is_rref(H, nrows, ncols, p)
         UH = mat_mul_ff(U, M, p)
         assert UH == H, f"U @ M ≠ H\nU={U}\nM={M}\nUH={UH}\nH={H}"
+        assert_invertible_ff(U, p, "U")
         return H, U
 
     def test_identity_p5(self):
@@ -325,6 +329,8 @@ class TestPublicAPI:
         V = result.right_transform.entries
         UMV = mat_mul_ff(mat_mul_ff(U, M, 5), V, 5)
         assert UMV == [[1, 0], [0, 1]]
+        assert_invertible_ff(U, 5, "U")
+        assert_invertible_ff(V, 5, "V")
 
     def test_hnf_basic(self):
         from snforacle import ff_hermite_normal_form
@@ -344,6 +350,7 @@ class TestPublicAPI:
         H = result.hermite_normal_form.entries
         U = result.left_transform.entries
         assert mat_mul_ff(U, M, 7) == H
+        assert_invertible_ff(U, 7, "U")
 
     def test_rank_basic(self):
         from snforacle import ff_rank

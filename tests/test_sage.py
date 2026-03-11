@@ -4,6 +4,7 @@ import shutil
 
 import pytest
 
+from _mathelpers import assert_unimodular
 from snforacle import (
     elementary_divisors,
     hermite_normal_form,
@@ -179,6 +180,8 @@ class TestSageSNFWithTransforms:
         D = result.smith_normal_form.entries
         computed = _mat_mul(_mat_mul(U, M_entries), V)
         assert computed == D, f"U@M@V={computed} != D={D}"
+        assert_unimodular(U, "U")
+        assert_unimodular(V, "V")
 
     def test_3x3(self):
         M = [[2, 4, 4], [-6, 6, 12], [10, -4, -16]]
@@ -310,6 +313,7 @@ class TestSageHNF:
         H = result.hermite_normal_form.entries
         computed = _mat_mul(U, M)
         assert computed == H, f"U·M={computed} != H={H}"
+        assert_unimodular(U, "U")
 
     def test_elementary_divisors(self):
         """Elementary divisors should match SNF invariant factors."""

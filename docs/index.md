@@ -12,6 +12,19 @@ The **Hermite Normal Form** (row HNF) is the unique upper-triangular matrix H wi
 
 The **elementary divisors** are the non-zero diagonal entries of the SNF, returned in non-decreasing order.
 
+## AI Disclaimer
+
+This package was designed by [Ben Antieau](https://antieau.github.io/) and authored almost entirely by [Claude Code](https://claude.ai/). It is part of
+the codebase being developed by Ben Antieau and [Achim Krause](https://www.akrause.xyz/) for their various projects. The human in
+the picture has caused CC to create extensive testing which compares the outputs across different
+computer algebra systems. He is confident that this software is at least as bug-free as is standard
+for mathematical software, and he thinks it is likely much more bug-free.
+
+Testing included 1000s of random matrices across the available backends. In one case, we discovered
+a bug in FLINT, which has now been fixed; see [flint#2592](https://github.com/flintlib/flint/issues/2592).
+Ben will write more about the process of creating this package elsewhere.
+
+
 ## Backends
 
 ### Integer matrices

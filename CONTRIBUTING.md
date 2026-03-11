@@ -1,7 +1,6 @@
 # Contributing to snforacle
 
-Thank you for your interest in contributing!  Bug reports, documentation fixes,
-new backends, and test improvements are all welcome.
+Bug reports, documentation fixes, new backends, and test improvements are all welcome.
 
 ## Development setup
 

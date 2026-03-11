@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from _mathelpers import assert_unimodular
 from snforacle import (
     DenseIntMatrix,
     SparseIntMatrix,
@@ -233,6 +234,7 @@ class TestEvilHNFWithTransform:
             U = result.left_transform.entries
             _verify_hnf(H, nrows, ncols)
             assert _mat_mul(U, entries) == H, f"{tag}: U@M ≠ H for {b}"
+            assert_unimodular(U, f"{tag}/{b}")
             if ref_hnf is not None:
                 assert H == ref_hnf, f"{tag}: {b} HNF differs from {_HNF_BACKENDS[0]}"
 
@@ -289,6 +291,8 @@ class TestEvilSNFWithTransforms:
             assert _mat_mul(_mat_mul(U, entries), V) == S, (
                 f"{tag}: U@M@V ≠ SNF for {b}"
             )
+            assert_unimodular(U, f"{tag}/{b}")
+            assert_unimodular(V, f"{tag}/{b}")
 
 
 # ---------------------------------------------------------------------------

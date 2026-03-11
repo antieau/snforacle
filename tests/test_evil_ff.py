@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pytest
 
+from _mathelpers import assert_invertible_ff
 from snforacle.backends.pure_python_ff import (
     PurePythonFFBackend,
     mat_mul_ff,
@@ -158,6 +159,8 @@ def test_snf_with_transforms(backend_name, backend, name, M, nrows, ncols, p, ex
     assert _is_snf(snf, nrows, ncols, rank), f"[{backend_name}/{name}] SNF not canonical"
     UMV = mat_mul_ff(mat_mul_ff(U, M, p), V, p)
     assert UMV == snf, f"[{backend_name}/{name}] U @ M @ V ≠ snf"
+    assert_invertible_ff(U, p, "U")
+    assert_invertible_ff(V, p, "V")
 
 
 @pytest.mark.parametrize("backend_name,backend", list(ALL_BACKENDS.items()))
@@ -178,6 +181,7 @@ def test_hnf_with_transform(backend_name, backend, name, M, nrows, ncols, p, exp
     assert _is_rref(H, nrows, ncols), f"[{backend_name}/{name}] H not RREF"
     UH = mat_mul_ff(U, M, p)
     assert UH == H, f"[{backend_name}/{name}] U @ M ≠ H"
+    assert_invertible_ff(U, p, "U")
 
 
 @pytest.mark.parametrize("backend_name,backend", list(ALL_BACKENDS.items()))
