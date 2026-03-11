@@ -96,7 +96,7 @@ def test_zz_snf(backend, nrows, ncols, entries, inv_factors, snf_expected, hnf_e
     try:
         res = smith_normal_form(inp, backend=backend)
     except RuntimeError as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.invariant_factors == inv_factors
@@ -112,7 +112,7 @@ def test_zz_hnf(backend, nrows, ncols, entries, inv_factors, snf_expected, hnf_e
     try:
         res = hermite_normal_form(inp, backend=backend)
     except (RuntimeError, NotImplementedError) as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.hermite_normal_form.entries == hnf_expected
@@ -127,7 +127,7 @@ def test_zz_elementary_divisors(backend, nrows, ncols, entries, inv_factors, snf
     try:
         res = elementary_divisors(inp, backend=backend)
     except RuntimeError as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.elementary_divisors == inv_factors
@@ -202,7 +202,7 @@ def test_ff_snf(backend, p, nrows, ncols, entries, rank, snf_expected, hnf_expec
     try:
         res = ff_smith_normal_form(inp, backend=backend)
     except RuntimeError as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.rank == rank
@@ -218,7 +218,7 @@ def test_ff_hnf(backend, p, nrows, ncols, entries, rank, snf_expected, hnf_expec
     try:
         res = ff_hermite_normal_form(inp, backend=backend)
     except RuntimeError as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.hermite_normal_form.entries == hnf_expected
@@ -233,7 +233,7 @@ def test_ff_rank(backend, p, nrows, ncols, entries, rank, snf_expected, hnf_expe
     try:
         res = ff_rank(inp, backend=backend)
     except RuntimeError as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.rank == rank
@@ -311,7 +311,7 @@ def test_poly_snf(backend, p, nrows, ncols, entries, inv_factors, snf_expected, 
     try:
         res = poly_smith_normal_form(inp, backend=backend)
     except RuntimeError as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.invariant_factors == inv_factors
@@ -329,7 +329,7 @@ def test_poly_hnf(backend, p, nrows, ncols, entries, inv_factors, snf_expected, 
     try:
         res = poly_hermite_normal_form(inp, backend=backend)
     except RuntimeError as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.hermite_normal_form.entries == hnf_expected
@@ -346,7 +346,7 @@ def test_poly_elementary_divisors(backend, p, nrows, ncols, entries, inv_factors
     try:
         res = poly_elementary_divisors(inp, backend=backend)
     except RuntimeError as e:
-        if "not available" in str(e) or "not installed" in str(e):
+        if "not available" in str(e) or "not installed" in str(e) or "not found" in str(e):
             pytest.skip(f"{backend} not available")
         raise
     assert res.elementary_divisors == inv_factors
