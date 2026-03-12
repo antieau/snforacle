@@ -29,10 +29,11 @@ theme:
     - content.code.copy
 
 extra_css:
-  - https://unpkg.com/asciinema-player@3/dist/bundle/player.css
+  - assets/asciinema-player.css
 
 extra_javascript:
-  - https://unpkg.com/asciinema-player@3/dist/bundle/player.js
+  - assets/asciinema-player.js
+  - javascripts/asciinema-init.js
 
 plugins:
   - search

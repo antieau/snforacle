@@ -15,16 +15,6 @@ The **elementary divisors** are the non-zero diagonal entries of the SNF, return
 ## Demo
 
 <div id="snf-demo"></div>
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    AsciinemaPlayer.create(
-      'assets/snf_demo.cast',
-      document.getElementById('snf-demo'),
-      { autoPlay: true, loop: true, speed: 1.5, theme: 'solarized-dark',
-        terminalFontSize: 'small', fit: 'width' }
-    );
-  });
-</script>
 
 ## AI Disclaimer
 
