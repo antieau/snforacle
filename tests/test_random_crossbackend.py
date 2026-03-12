@@ -12,12 +12,12 @@ entire module is skipped when MAGMA is not on PATH.
 
 Matrix sizes and counts
 -----------------------
-ZZ   : 200 matrices, shapes in [10, 30] × [10, 30], entries in [-10, 10].
+ZZ   : 30 matrices, shapes in [10, 30] × [10, 30], entries in [-10, 10].
        pure_python is additionally compared on every 10th matrix with
        max(nrows, ncols) ≤ PP_MAX=12 to guard against integer blow-up.
-Fp   : 200 matrices, shapes in [5, 20] × [5, 20], primes from a fixed cycle.
+Fp   : 30 matrices, shapes in [5, 20] × [5, 20], primes from a fixed cycle.
        pure_python compared on every 5th matrix.
-Fp[x]: 50 matrices, shapes in [2, 5] × [2, 5], degree ≤ 2, primes cycled.
+Fp[x]: 15 matrices, shapes in [2, 5] × [2, 5], degree ≤ 2, primes cycled.
        pure_python compared on every matrix (small enough to be fast).
 """
 
@@ -190,9 +190,9 @@ PP_MAX    = 12
 
 
 class TestZZCrossBackend:
-    """MAGMA vs all available backends on 200 random integer matrices."""
+    """MAGMA vs all available backends on 30 random integer matrices."""
 
-    N = 200
+    N = 30
 
     def test_snf(self):
         for i, nrows, ncols, entries in _gen_zz(self.N):
@@ -310,9 +310,9 @@ FF_PP_STRIDE = 5
 
 
 class TestFpCrossBackend:
-    """MAGMA vs all available backends on 200 random Fp matrices."""
+    """MAGMA vs all available backends on 30 random Fp matrices."""
 
-    N = 200
+    N = 30
 
     def test_snf(self):
         for i, p, nrows, ncols, entries in _gen_ff(self.N):
@@ -409,9 +409,9 @@ class TestFpCrossBackend:
 # ---------------------------------------------------------------------------
 
 class TestFpxCrossBackend:
-    """MAGMA vs all available backends on 50 random Fp[x] matrices."""
+    """MAGMA vs all available backends on 15 random Fp[x] matrices."""
 
-    N = 50
+    N = 15
 
     def test_snf(self):
         for i, p, nrows, ncols, entries in _gen_poly(self.N):

@@ -12,6 +12,20 @@ The **Hermite Normal Form** (row HNF) is the unique upper-triangular matrix H wi
 
 The **elementary divisors** are the non-zero diagonal entries of the SNF, returned in non-decreasing order.
 
+## Demo
+
+<div id="snf-demo"></div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    AsciinemaPlayer.create(
+      'assets/snf_demo.cast',
+      document.getElementById('snf-demo'),
+      { autoPlay: true, loop: true, speed: 1.5, theme: 'solarized-dark',
+        terminalFontSize: 'small', fit: 'width' }
+    );
+  });
+</script>
+
 ## AI Disclaimer
 
 This package was designed by [Ben Antieau](https://antieau.github.io/) and authored almost entirely by [Claude Code](https://claude.ai/). It is part of

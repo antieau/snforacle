@@ -2,6 +2,19 @@
 
 [![CI](https://github.com/antieau/snforacle/actions/workflows/ci.yml/badge.svg)](https://github.com/antieau/snforacle/actions/workflows/ci.yml)
 
+```
+   ╔═╗ ╔╗  ╔══ ╔═╗ ╦═╗ ╔═╗ ╔═╗ ╦   ╔═╗
+   ╚═╗ ║╚╗ ╠══ ║ ║ ╠╦╝ ╠═╣ ║   ║   ╠═
+   ╚═╝ ╝  ╝╩   ╚═╝ ╩╚═ ╩ ╩ ╚═╝ ╚══ ╚═╝
+
+   ────────────────────────────────────
+   Smith Normal Form · Hermite Normal Form · Elementary Divisors
+   for  ℤ  ·  F_p  ·  F_p[x]  —  pluggable multi-backend Python API
+
+   Backends:  PARI/GP (cypari2)  ·  FLINT (python-flint)
+              SageMath  ·  MAGMA  ·  pure Python (reference)
+```
+
 **snforacle** computes the [Smith normal form](https://en.wikipedia.org/wiki/Smith_normal_form) (SNF), [Hermite normal form](https://en.wikipedia.org/wiki/Hermite_normal_form) (HNF), and elementary divisors of integer matrices, polynomial matrices over F_p[x], and matrices over finite fields F_p — all through a single, uniform Python API, regardless of which backend does the actual computation.
 
 The **Smith normal form** of an integer matrix M is the unique diagonal matrix D = diag(d₁, d₂, …, dᵣ) with d₁ | d₂ | … | dᵣ such that D = U · M · V for some invertible integer matrices U, V. The diagonal entries are the **invariant factors** of M; they appear in homology computations, lattice problems, and number theory.
@@ -359,6 +372,18 @@ python benchmarks/bench.py
 ```
 
 This times all available backends on random matrices at multiple sizes. Integer results are printed as an ASCII table and saved to `benchmarks/results.csv`; finite-field results are saved to `benchmarks/ff_results.csv`.
+
+## Demo
+
+An animated step-by-step visualisation of the SNF algorithm can be generated with:
+
+```bash
+python tools/generate_asciinema.py '[[10,0,0],[0,6,0],[6,0,6]]' snf_demo.cast
+asciinema play snf_demo.cast
+```
+
+This produces a `.cast` file (asciinema v2 format) showing each row/column operation
+with colour-highlighted pivots and side panels for the U and V transform matrices.
 
 ## Development
 

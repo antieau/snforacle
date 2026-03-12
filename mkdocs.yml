@@ -28,6 +28,12 @@ theme:
     - search.highlight
     - content.code.copy
 
+extra_css:
+  - https://unpkg.com/asciinema-player@3/dist/bundle/player.css
+
+extra_javascript:
+  - https://unpkg.com/asciinema-player@3/dist/bundle/player.js
+
 plugins:
   - search
   - gen-files:

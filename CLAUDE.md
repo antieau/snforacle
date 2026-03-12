@@ -16,6 +16,10 @@ pytest --cov=snforacle tests/
 
 # Run benchmarks (prints ASCII table, saves benchmarks/results.csv)
 python benchmarks/bench.py
+
+# Generate an animated SNF demo (requires asciinema to play back)
+python tools/generate_asciinema.py '[[10,0,0],[0,6,0],[6,0,6]]' snf_demo.cast
+asciinema play snf_demo.cast
 ```
 
 ## Architecture

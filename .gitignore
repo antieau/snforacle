@@ -6,6 +6,7 @@ benchmarks/results.csv
 benchmarks/large_results.csv
 benchmarks/ff_results.csv
 demo.cast
+/snf_demo.cast
 
 # Local virtual environment
 .venv/
