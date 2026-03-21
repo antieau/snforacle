@@ -29,8 +29,8 @@ you need to run SNF on lots of small matrices, another solution might be preferr
 
 ## AI Disclaimer
 
-This package was designed by Ben Antieau and authored almost entirely by Claude Code. It is part of
-the codebase being developed by Ben Antieau and Achim Krause for their various projects. The human in
+This package was authored almost entirely by Claude Code. It is part of
+the codebase being developed by [Ben Antieau](https://antieau.github.io/) and [Achim Krause](https://www.akrause.xyz/) for their various projects. The human in
 the picture has caused CC to create extensive testing which compares the outputs across different
 computer algebra systems. He is confident that this software is at least as bug-free as is standard
 for mathematical software, and he thinks it is likely much more bug-free.
