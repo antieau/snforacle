@@ -14,6 +14,7 @@ import shutil
 import signal
 import statistics
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -115,6 +116,59 @@ def _alarm_handler(signum, frame):
     raise _TimeoutError()
 
 
+# ---------------------------------------------------------------------------
+# CLI startup overhead measurement
+# ---------------------------------------------------------------------------
+
+_CLI_BACKENDS = {"sage", "magma"}
+
+# Trivial scripts that do nothing — measure pure startup + teardown cost.
+_NOOP_SCRIPTS: dict[str, str] = {
+    "sage": "pass\n",
+    "magma": "quit;\n",
+}
+
+# Script file extensions expected by each CLI tool.
+_SCRIPT_EXT: dict[str, str] = {
+    "sage": ".sage",
+    "magma": ".m",
+}
+
+# Extra CLI flags (MAGMA needs -b to suppress banner).
+_EXTRA_FLAGS: dict[str, list[str]] = {
+    "sage": [],
+    "magma": ["-b"],
+}
+
+
+def _measure_startup_overhead(backend_name: str, repeats: int = 3) -> float:
+    """Time a no-op script for a CLI backend, return median elapsed seconds."""
+    binary = shutil.which(backend_name)
+    if binary is None:
+        return 0.0
+
+    script_body = _NOOP_SCRIPTS[backend_name]
+    ext = _SCRIPT_EXT[backend_name]
+    flags = _EXTRA_FLAGS[backend_name]
+
+    times: list[float] = []
+    for _ in range(repeats):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_path = str(Path(tmpdir) / f"noop{ext}")
+            with open(script_path, "w") as f:
+                f.write(script_body)
+            start = time.perf_counter()
+            subprocess.run(
+                [binary] + flags + [script_path],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            times.append(time.perf_counter() - start)
+
+    return statistics.median(times)
+
+
 def _make_ff_matrix(n: int, p: int, seed: int = 42) -> list[list[int]]:
     """Return an n×n dense matrix with entries uniform in [0, p-1]."""
     try:
@@ -129,6 +183,7 @@ def _make_ff_matrix(n: int, p: int, seed: int = 42) -> list[list[int]]:
 def _time_ff_backend(
     name: str, matrix: list[list[int]], n: int, p: int, timeout: int,
     *, mode: str = "snf", transforms: bool = False,
+    startup_overhead: float = 0.0,
 ) -> float | str:
     """Time a single FF computation; return elapsed seconds or 'timeout'/'error'."""
     from snforacle import (  # noqa: PLC0415
@@ -159,7 +214,7 @@ def _time_ff_backend(
         start = time.perf_counter()
         fn(inp, backend=name)
         elapsed = time.perf_counter() - start
-        return elapsed
+        return max(0.0, elapsed - startup_overhead)
     except (_TimeoutError, TimeoutError, subprocess.TimeoutExpired):
         return "timeout"
     except Exception as exc:
@@ -172,13 +227,14 @@ def _time_ff_backend(
 def _run_ff_benchmark(
     name: str, size: int, variant: str, matrix: list[list[int]], p: int,
     *, mode: str = "snf", transforms: bool = False,
+    startup_overhead: float = 0.0,
 ) -> str:
     """Run timed FF benchmark(s) for one (backend, size, variant) combination."""
     repeats = _REPEATS_SMALL if size <= _THRESHOLD_REPEATS else _REPEATS_LARGE
     times: list[float] = []
 
     for _ in range(repeats):
-        result = _time_ff_backend(name, matrix, size, p, _TIMEOUT, mode=mode, transforms=transforms)
+        result = _time_ff_backend(name, matrix, size, p, _TIMEOUT, mode=mode, transforms=transforms, startup_overhead=startup_overhead)
         if isinstance(result, str):
             return result
         times.append(result)
@@ -190,6 +246,7 @@ def _run_ff_benchmark(
 def _time_backend(
     name: str, matrix: list[list[int]], n: int, timeout: int,
     *, mode: str = "snf", transforms: bool = False,
+    startup_overhead: float = 0.0,
 ) -> float | str:
     """Time a single computation; return elapsed seconds or 'timeout'/'error'.
 
@@ -235,7 +292,7 @@ def _time_backend(
         start = time.perf_counter()
         fn(inp, backend=name)
         elapsed = time.perf_counter() - start
-        return elapsed
+        return max(0.0, elapsed - startup_overhead)
     except (_TimeoutError, TimeoutError, subprocess.TimeoutExpired):
         return "timeout"
     except Exception as exc:
@@ -248,13 +305,14 @@ def _time_backend(
 def _run_benchmark(
     name: str, size: int, variant: str, matrix: list[list[int]],
     *, mode: str = "snf", transforms: bool = False,
+    startup_overhead: float = 0.0,
 ) -> str:
     """Run timed benchmark(s) for one (backend, size, variant) combination."""
     repeats = _REPEATS_SMALL if size <= _THRESHOLD_REPEATS else _REPEATS_LARGE
     times: list[float] = []
 
     for _ in range(repeats):
-        result = _time_backend(name, matrix, size, _TIMEOUT, mode=mode, transforms=transforms)
+        result = _time_backend(name, matrix, size, _TIMEOUT, mode=mode, transforms=transforms, startup_overhead=startup_overhead)
         if isinstance(result, str):
             return result  # 'timeout' or 'error: ...'
         times.append(result)
@@ -316,6 +374,15 @@ def main() -> None:
         status = "available" if avail else "unavailable (skipped)"
         print(f"  {name}: {status}")
 
+    # Measure CLI backend startup overhead so we can subtract it from timings.
+    startup_overheads: dict[str, float] = {}
+    for name in _BACKENDS:
+        if name in _CLI_BACKENDS and available.get(name):
+            print(f"  Measuring {name} startup overhead...", end="", flush=True)
+            overhead = _measure_startup_overhead(name)
+            startup_overheads[name] = overhead
+            print(f" {overhead:.3f}s")
+
     rows: list[tuple[str, ...]] = []
 
     for size in _SIZES:
@@ -349,6 +416,7 @@ def main() -> None:
                     print(f"    {backend:12s} ...", end="", flush=True)
                     result_str = _run_benchmark(
                         backend, size, variant, matrix, mode=mode, transforms=transforms,
+                        startup_overhead=startup_overheads.get(backend, 0.0),
                     )
                     print(f" {result_str}")
                 rows.append((backend, str(size), variant, result_str))
@@ -371,6 +439,18 @@ def main() -> None:
     for name, avail in ff_available.items():
         status = "available" if avail else "unavailable (skipped)"
         print(f"  {name}: {status}")
+
+    # Measure CLI backend startup overhead for FF (reuse if already measured).
+    ff_startup_overheads: dict[str, float] = {}
+    for name in _FF_BACKENDS:
+        if name in _CLI_BACKENDS and ff_available.get(name):
+            if name in startup_overheads:
+                ff_startup_overheads[name] = startup_overheads[name]
+            else:
+                print(f"  Measuring {name} startup overhead...", end="", flush=True)
+                overhead = _measure_startup_overhead(name)
+                ff_startup_overheads[name] = overhead
+                print(f" {overhead:.3f}s")
 
     ff_rows: list[tuple[str, ...]] = []
 
@@ -403,6 +483,7 @@ def main() -> None:
                         result_str = _run_ff_benchmark(
                             backend, size, variant, ff_matrix, _FF_P,
                             mode=mode, transforms=transforms,
+                            startup_overhead=ff_startup_overheads.get(backend, 0.0),
                         )
                         print(f" {result_str}")
                     ff_rows.append((backend, str(size), variant, result_str))
@@ -412,6 +493,7 @@ def main() -> None:
                     result_str = _run_ff_benchmark(
                         backend, size, variant, ff_matrix, _FF_P,
                         mode=mode, transforms=transforms,
+                        startup_overhead=ff_startup_overheads.get(backend, 0.0),
                     )
                     print(f" {result_str}")
                 ff_rows.append((backend, str(size), variant, result_str))
